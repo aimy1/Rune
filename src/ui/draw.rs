@@ -1,3 +1,4 @@
+use crate::config::Config;
 use crate::core::plugin::SearchResult;
 use crate::ui::ThemeStyles;
 use image::GenericImageView;
@@ -152,14 +153,10 @@ fn draw_settings_screen(
     settings_selected_category: usize,
     settings_selected_option: usize,
     scanned_fonts: &[String],
-    active_theme: &str,
-    active_lang: &str,
-    active_font: &str,
-    active_shell: &str,
-    active_editor: &str,
+    config: &Config,
     status_msg: Option<&str>,
 ) {
-    let is_zh = active_lang == "zh";
+    let is_zh = config.general.language == "zh";
     let title_text = if is_zh {
         " 系统设置 [Tab/←/→: 切换面板 | F1/Esc: 返回] "
     } else {
@@ -187,7 +184,7 @@ fn draw_settings_screen(
     let left_pane = workspace[0];
     let right_pane = workspace[1];
 
-    // Left Category List
+    // Left Category List (Expanded to 8 categories)
     let categories = if is_zh {
         vec![
             "1. 主题选择 (TUI Theme)",
@@ -195,6 +192,9 @@ fn draw_settings_screen(
             "3. 系统字体 (Monospace Font)",
             "4. 默认外壳 (Shell Executable)",
             "5. 文本编辑器 (Text Editor)",
+            "6. 插件管理 (Active Plugins)",
+            "7. AI 提供商 (AI Provider)",
+            "8. 文件搜索深度 (Files Max Depth)",
         ]
     } else {
         vec![
@@ -203,6 +203,9 @@ fn draw_settings_screen(
             "3. Monospace Font",
             "4. Shell Executable",
             "5. Text Editor",
+            "6. Active Plugins",
+            "7. AI Provider",
+            "8. Files Max Depth",
         ]
     };
 
@@ -267,7 +270,7 @@ fn draw_settings_screen(
                 "gruvbox".to_string(),
                 "everforest".to_string(),
             ];
-            active_val = active_theme.to_string();
+            active_val = config.theme.active.clone();
             desc = if is_zh {
                 "选择主界面的着色主题。支持 Tokyo Night, Catppuccin, Nord 等配色，按 Enter 键可 live 实时切换预览。".to_string()
             } else {
@@ -276,7 +279,7 @@ fn draw_settings_screen(
         }
         1 => {
             options = vec!["zh".to_string(), "en".to_string()];
-            active_val = active_lang.to_string();
+            active_val = config.general.language.clone();
             desc = if is_zh {
                 "切换主界面的语言。支持中文 (zh) 和英文 (en)，按 Enter 确定切换。".to_string()
             } else {
@@ -285,7 +288,7 @@ fn draw_settings_screen(
         }
         2 => {
             options = scanned_fonts.to_vec();
-            active_val = active_font.to_string();
+            active_val = config.general.font.clone();
             desc = if is_zh {
                 "选择您系统已安装的等宽字体。注意：等宽字体需要您在自己的终端模拟器配置中加载生效，Rune 仅进行配置记录。".to_string()
             } else {
@@ -294,7 +297,7 @@ fn draw_settings_screen(
         }
         3 => {
             options = vec!["bash".to_string(), "zsh".to_string(), "fish".to_string()];
-            active_val = active_shell.to_string();
+            active_val = config.general.shell.clone();
             desc = if is_zh {
                 "设置用于启动后台/前台终端命令行任务的默认 Shell 运行程序。".to_string()
             } else {
@@ -303,11 +306,55 @@ fn draw_settings_screen(
         }
         4 => {
             options = vec!["nano".to_string(), "vim".to_string(), "nvim".to_string(), "hx".to_string()];
-            active_val = active_editor.to_string();
+            active_val = config.general.editor.clone();
             desc = if is_zh {
                 "设置打开文本配置、外部修改时调用的默认终端编辑器。".to_string()
             } else {
                 "Configure default terminal text editor to open configuration or script files.".to_string()
+            };
+        }
+        5 => {
+            options = vec![
+                "applications".to_string(),
+                "files".to_string(),
+                "commands".to_string(),
+                "calculator".to_string(),
+                "unit_converter".to_string(),
+                "ssh".to_string(),
+                "clipboard".to_string(),
+                "git".to_string(),
+                "docker".to_string(),
+                "systemd".to_string(),
+                "ai".to_string(),
+            ];
+            desc = if is_zh {
+                "切换各个功能插件的启用状态。按 Enter 键可对当前选中的插件进行开启/关闭。禁用未使用的插件可优化响应速度。".to_string()
+            } else {
+                "Toggle activation status of specific functional plugins. Press Enter to enable/disable. Disabling unused plugins speeds up search.".to_string()
+            };
+        }
+        6 => {
+            options = vec!["openai".to_string(), "gemini".to_string(), "ollama".to_string()];
+            active_val = config.plugins.ai_provider.clone();
+            desc = if is_zh {
+                "选择用于 AI 助手插件的底层服务模型提供商。可在 config.toml 中配置对应的 API Key。".to_string()
+            } else {
+                "Select AI model provider used by the AI chatbot plugin. Make sure to configure the API key in config.toml.".to_string()
+            };
+        }
+        7 => {
+            options = vec![
+                "2".to_string(),
+                "3".to_string(),
+                "4".to_string(),
+                "5".to_string(),
+                "6".to_string(),
+            ];
+            active_val = config.plugins.files_max_depth.to_string();
+            desc = if is_zh {
+                "配置文件搜索时深度优先遍历的最大目录级数。级别越深，扫描文件越全面，但也更耗费磁盘性能。".to_string()
+            } else {
+                "Configure maximum directory depth for file system scanning. Deeper scans find more files but consume more I/O.".to_string()
             };
         }
         _ => {}
@@ -319,7 +366,25 @@ fn draw_settings_screen(
         .map(|(idx, opt)| {
             let is_hovered = idx == settings_selected_option;
             let is_focused = settings_focused_pane == 1 && is_hovered;
-            let is_active = opt == &active_val;
+            
+            let is_active = if settings_selected_category == 5 {
+                match opt.as_str() {
+                    "applications" => config.plugins.applications,
+                    "files" => config.plugins.files,
+                    "commands" => config.plugins.commands,
+                    "calculator" => config.plugins.calculator,
+                    "unit_converter" => config.plugins.unit_converter,
+                    "ssh" => config.plugins.ssh,
+                    "clipboard" => config.plugins.clipboard,
+                    "git" => config.plugins.git,
+                    "docker" => config.plugins.docker,
+                    "systemd" => config.plugins.systemd,
+                    "ai" => config.plugins.ai,
+                    _ => false,
+                }
+            } else {
+                opt == &active_val
+            };
             
             let style = if is_focused {
                 Style::default().bg(theme.selection).fg(theme.accent).add_modifier(Modifier::BOLD)
@@ -392,11 +457,7 @@ pub fn draw_app(
     settings_selected_category: usize,
     settings_selected_option: usize,
     scanned_fonts: &[String],
-    active_theme: &str,
-    active_lang: &str,
-    active_font: &str,
-    active_shell: &str,
-    active_editor: &str,
+    config: &Config,
 ) {
     let size = frame.size();
 
@@ -422,17 +483,13 @@ pub fn draw_app(
             settings_selected_category,
             settings_selected_option,
             scanned_fonts,
-            active_theme,
-            active_lang,
-            active_font,
-            active_shell,
-            active_editor,
+            config,
             status_msg,
         );
         return;
     }
 
-    let is_zh = active_lang == "zh";
+    let is_zh = config.general.language == "zh";
 
     // Main window outline container block
     let outer_title = if is_zh {

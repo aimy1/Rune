@@ -267,7 +267,7 @@ impl App {
                 KeyCode::Up => {
                     if self.settings_focused_pane == 0 {
                         if self.settings_selected_category == 0 {
-                            self.settings_selected_category = 4;
+                            self.settings_selected_category = 7;
                         } else {
                             self.settings_selected_category -= 1;
                         }
@@ -284,7 +284,7 @@ impl App {
                 }
                 KeyCode::Down => {
                     if self.settings_focused_pane == 0 {
-                        self.settings_selected_category = (self.settings_selected_category + 1) % 5;
+                        self.settings_selected_category = (self.settings_selected_category + 1) % 8;
                     } else {
                         let count = self.get_options_count();
                         if count > 0 {
@@ -474,11 +474,7 @@ impl App {
                     self.settings_selected_category,
                     self.settings_selected_option,
                     &self.scanned_fonts,
-                    &self.config.theme.active,
-                    &self.config.general.language,
-                    &self.config.general.font,
-                    &self.config.general.shell,
-                    &self.config.general.editor,
+                    &self.config,
                 );
             })?;
 
