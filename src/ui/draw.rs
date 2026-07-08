@@ -153,7 +153,7 @@ fn draw_settings_screen(
     settings_focused_pane: usize,
     settings_selected_category: usize,
     settings_selected_option: usize,
-    scanned_fonts: &[String],
+    _scanned_fonts: &[String],
     config: &Config,
     status_msg: Option<&str>,
     settings_input_mode: bool,
@@ -187,30 +187,28 @@ fn draw_settings_screen(
     let left_pane = workspace[0];
     let right_pane = workspace[1];
 
-    // Left Category List (Expanded to 9 categories)
+    // Left Category List (Expanded to 8 categories)
     let categories = if is_zh {
         vec![
             "1. 主题选择 (TUI Theme)",
             "2. 语言切换 (UI Language)",
-            "3. 系统字体 (Monospace Font)",
-            "4. 默认外壳 (Shell Executable)",
-            "5. 文本编辑器 (Text Editor)",
-            "6. 插件管理 (Active Plugins)",
-            "7. AI 提供商 (AI Provider)",
-            "8. AI 参数配置 (AI Credentials)",
-            "9. 文件搜索深度 (Files Max Depth)",
+            "3. 文本编辑器 (Text Editor)",
+            "4. 插件管理 (Active Plugins)",
+            "5. AI 提供商 (AI Provider)",
+            "6. AI 参数配置 (AI Credentials)",
+            "7. 文件搜索深度 (Files Max Depth)",
+            "8. 关于项目 (About Rune)",
         ]
     } else {
         vec![
             "1. TUI Theme",
             "2. UI Language",
-            "3. Monospace Font",
-            "4. Shell Executable",
-            "5. Text Editor",
-            "6. Active Plugins",
-            "7. AI Provider",
-            "8. AI Credentials",
-            "9. Files Max Depth",
+            "3. Text Editor",
+            "4. Active Plugins",
+            "5. AI Provider",
+            "6. AI Credentials",
+            "7. Files Max Depth",
+            "8. About Rune",
         ]
     };
 
@@ -292,29 +290,6 @@ fn draw_settings_screen(
             };
         }
         2 => {
-            options = scanned_fonts.to_vec();
-            active_val = config.general.font.clone();
-            desc = if is_zh {
-                "选择您系统已安装的等宽字体。注意：等宽字体需要您在自己的终端模拟器配置中加载生效，Rune 仅进行配置记录。".to_string()
-            } else {
-                "Select a system Monospace font. Note: Fonts are managed by your terminal emulator; Rune only records it in config.".to_string()
-            };
-        }
-        3 => {
-            options = vec![
-                "bash".to_string(),
-                "zsh".to_string(),
-                "fish".to_string(),
-                format!("custom ({})", config.general.shell),
-            ];
-            active_val = config.general.shell.clone();
-            desc = if is_zh {
-                "设置默认 Shell。选择最后一项按 Enter 可手动输入自定义的 Shell 路径 (如 /usr/bin/nu)。".to_string()
-            } else {
-                "Configure default shell environment. Select the last option and press Enter to type a custom path.".to_string()
-            };
-        }
-        4 => {
             options = vec![
                 "nano".to_string(),
                 "vim".to_string(),
@@ -329,7 +304,7 @@ fn draw_settings_screen(
                 "Configure default editor. Select the last option and press Enter to type a custom command.".to_string()
             };
         }
-        5 => {
+        3 => {
             options = vec![
                 "applications".to_string(),
                 "files".to_string(),
@@ -349,7 +324,7 @@ fn draw_settings_screen(
                 "Toggle activation status of specific functional plugins. Press Enter to enable/disable. Disabling unused plugins speeds up search.".to_string()
             };
         }
-        6 => {
+        4 => {
             options = vec!["openai".to_string(), "gemini".to_string(), "ollama".to_string()];
             active_val = config.plugins.ai_provider.clone();
             desc = if is_zh {
@@ -358,7 +333,7 @@ fn draw_settings_screen(
                 "Select AI model provider used by the AI chatbot plugin. Make sure to configure the API key in config.toml.".to_string()
             };
         }
-        7 => {
+        5 => {
             let masked_key = if config.plugins.ai_api_key.is_empty() {
                 "[Not Set]".to_string()
             } else {
@@ -376,7 +351,7 @@ fn draw_settings_screen(
                 "Configure AI chatbot credentials. Select any item and press Enter to edit in the text prompt below.".to_string()
             };
         }
-        8 => {
+        6 => {
             options = vec![
                 "2".to_string(),
                 "3".to_string(),
@@ -391,6 +366,30 @@ fn draw_settings_screen(
                 "Configure maximum directory depth for file system scanning. Deeper scans find more files but consume more I/O.".to_string()
             };
         }
+        7 => {
+            options = if is_zh {
+                vec![
+                    "项目名称: Rune Launcher".to_string(),
+                    "项目版本: v0.1.0 (Rust)".to_string(),
+                    "核心协议: MIT License".to_string(),
+                    "源码仓库: github.com/aimy1/Rune".to_string(),
+                    "开发团队: Google DeepMind team".to_string(),
+                ]
+            } else {
+                vec![
+                    "Project: Rune Launcher".to_string(),
+                    "Version: v0.1.0 (Rust)".to_string(),
+                    "License: MIT License".to_string(),
+                    "Github: github.com/aimy1/Rune".to_string(),
+                    "Authors: Google DeepMind team".to_string(),
+                ]
+            };
+            desc = if is_zh {
+                "Rune 是一款基于 Rust 编写的高性能 TUI 应用启动器与命令面板。支持模糊搜索，内置计算器、插件扩展、AI 聊天及配置管理。".to_string()
+            } else {
+                "Rune is a high-performance, fuzzy-search terminal launcher and command palette. Featuring calculators, clipboard managers, systemd monitoring, and built-in AI chatbots.".to_string()
+            };
+        }
         _ => {}
     }
 
@@ -401,7 +400,7 @@ fn draw_settings_screen(
             let is_hovered = idx == settings_selected_option;
             let is_focused = settings_focused_pane == 1 && is_hovered;
             
-            let is_active = if settings_selected_category == 5 {
+            let is_active = if settings_selected_category == 3 {
                 match opt.as_str() {
                     "applications" => config.plugins.applications,
                     "files" => config.plugins.files,
@@ -416,7 +415,7 @@ fn draw_settings_screen(
                     "ai" => config.plugins.ai,
                     _ => false,
                 }
-            } else if settings_selected_category == 7 {
+            } else if settings_selected_category == 5 || settings_selected_category == 7 {
                 false
             } else {
                 // If it is shell or editor custom value, option has string "custom (xyz)"
@@ -467,9 +466,8 @@ fn draw_settings_screen(
     // Status / Input text block
     let status_text = if settings_input_mode {
         let field_label = match settings_selected_category {
-            3 => if is_zh { "编辑 Shell 执行路径: " } else { "Edit Shell Path: " },
-            4 => if is_zh { "编辑编辑器命令: " } else { "Edit Editor Command: " },
-            7 => match settings_selected_option {
+            2 => if is_zh { "编辑编辑器命令: " } else { "Edit Editor Command: " },
+            5 => match settings_selected_option {
                 0 => if is_zh { "编辑 API Key: " } else { "Edit API Key: " },
                 1 => if is_zh { "编辑模型名称 (Model): " } else { "Edit Model: " },
                 2 => if is_zh { "编辑 API URL 终结点: " } else { "Edit API URL: " },

@@ -156,13 +156,12 @@ impl App {
         match self.settings_selected_category {
             0 => 5, // TUI themes
             1 => 2, // UI language
-            2 => self.scanned_fonts.len(), // monospace fonts
-            3 => 4, // shell (+ custom)
-            4 => 5, // editor (+ custom)
-            5 => 11, // plugins toggles
-            6 => 3, // AI providers
-            7 => 3, // AI configs (Key, Model, URL)
-            8 => 5, // Files Max Depth
+            2 => 5, // editor (+ custom)
+            3 => 11, // plugins toggles
+            4 => 3, // AI providers
+            5 => 3, // AI configs (Key, Model, URL)
+            6 => 5, // Files Max Depth
+            7 => 0, // About (0 options, focus stays on category pane)
             _ => 0,
         }
     }
@@ -192,26 +191,13 @@ impl App {
                 }
             }
             2 => {
-                if self.settings_selected_option < self.scanned_fonts.len() {
-                    let chosen = self.scanned_fonts[self.settings_selected_option].clone();
-                    self.config.general.font = chosen;
-                }
-            }
-            3 => {
-                let shells = vec!["bash".to_string(), "zsh".to_string(), "fish".to_string()];
-                if self.settings_selected_option < shells.len() {
-                    let chosen = shells[self.settings_selected_option].clone();
-                    self.config.general.shell = chosen;
-                }
-            }
-            4 => {
                 let editors = vec!["nano".to_string(), "vim".to_string(), "nvim".to_string(), "hx".to_string()];
                 if self.settings_selected_option < editors.len() {
                     let chosen = editors[self.settings_selected_option].clone();
                     self.config.general.editor = chosen;
                 }
             }
-            5 => {
+            3 => {
                 // Toggle plugin enable state on/off
                 match self.settings_selected_option {
                     0 => self.config.plugins.applications = !self.config.plugins.applications,
@@ -232,7 +218,7 @@ impl App {
                 self.active_plugin_idx = 0; // reset to All tab
                 self.update_search();
             }
-            6 => {
+            4 => {
                 let providers = vec!["openai".to_string(), "gemini".to_string(), "ollama".to_string()];
                 if self.settings_selected_option < providers.len() {
                     let chosen = providers[self.settings_selected_option].clone();
@@ -259,7 +245,7 @@ impl App {
                     self.plugins = load_all_plugins(&self.config);
                 }
             }
-            8 => {
+            6 => {
                 let depths = vec![2, 3, 4, 5, 6];
                 if self.settings_selected_option < depths.len() {
                     self.config.plugins.files_max_depth = depths[self.settings_selected_option];
@@ -290,17 +276,12 @@ impl App {
     fn save_custom_input(&mut self) {
         let input = self.settings_input_buffer.trim().to_string();
         match self.settings_selected_category {
-            3 => {
-                if !input.is_empty() {
-                    self.config.general.shell = input;
-                }
-            }
-            4 => {
+            2 => {
                 if !input.is_empty() {
                     self.config.general.editor = input;
                 }
             }
-            7 => {
+            5 => {
                 match self.settings_selected_option {
                     0 => self.config.plugins.ai_api_key = input,
                     1 => {
@@ -403,7 +384,7 @@ impl App {
                 KeyCode::Up => {
                     if self.settings_focused_pane == 0 {
                         if self.settings_selected_category == 0 {
-                            self.settings_selected_category = 8;
+                            self.settings_selected_category = 7;
                         } else {
                             self.settings_selected_category -= 1;
                         }
@@ -420,7 +401,7 @@ impl App {
                 }
                 KeyCode::Down => {
                     if self.settings_focused_pane == 0 {
-                        self.settings_selected_category = (self.settings_selected_category + 1) % 9;
+                        self.settings_selected_category = (self.settings_selected_category + 1) % 8;
                     } else {
                         let count = self.get_options_count();
                         if count > 0 {
@@ -431,18 +412,16 @@ impl App {
                 KeyCode::Enter => {
                     if self.settings_focused_pane == 1 {
                         let is_custom_trigger = match self.settings_selected_category {
-                            3 => self.settings_selected_option == 3, // Custom Shell
-                            4 => self.settings_selected_option == 4, // Custom Editor
-                            7 => true, // Any AI Config field
+                            2 => self.settings_selected_option == 4, // Custom Editor
+                            5 => true, // Any AI Config field
                             _ => false,
                         };
                         
                         if is_custom_trigger {
                             self.settings_input_mode = true;
                             self.settings_input_buffer = match self.settings_selected_category {
-                                3 => self.config.general.shell.clone(),
-                                4 => self.config.general.editor.clone(),
-                                7 => match self.settings_selected_option {
+                                2 => self.config.general.editor.clone(),
+                                5 => match self.settings_selected_option {
                                     0 => self.config.plugins.ai_api_key.clone(),
                                     1 => self.config.plugins.ai_model.clone(),
                                     2 => self.config.plugins.ai_api_url.clone(),
@@ -454,8 +433,10 @@ impl App {
                             self.apply_and_save_setting();
                         }
                     } else {
-                        self.settings_focused_pane = 1;
-                        self.settings_selected_option = 0;
+                        if self.settings_selected_category != 7 {
+                            self.settings_focused_pane = 1;
+                            self.settings_selected_option = 0;
+                        }
                     }
                 }
                 _ => {}
