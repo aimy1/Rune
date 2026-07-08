@@ -1,0 +1,22 @@
+[package]
+name = "rune"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ratatui = "0.26"
+crossterm = { version = "0.27", features = ["event-stream"] }
+tokio = { version = "1.35", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+fuzzy-matcher = "0.3"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+walkdir = "2"
+arboard = "3.3"
+chrono = { version = "0.4", features = ["serde"] }
+reqwest = { version = "0.11", default-features = false, features = ["json", "stream", "rustls-tls"] }
+evalexpr = "8"
+dirs = "5"
+regex = "1"
