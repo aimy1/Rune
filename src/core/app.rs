@@ -203,6 +203,67 @@ impl App {
                     self.config.general.editor = chosen;
                 }
             }
+            5 => {
+                // Toggle plugin enable state on/off
+                match self.settings_selected_option {
+                    0 => self.config.plugins.applications = !self.config.plugins.applications,
+                    1 => self.config.plugins.files = !self.config.plugins.files,
+                    2 => self.config.plugins.commands = !self.config.plugins.commands,
+                    3 => self.config.plugins.calculator = !self.config.plugins.calculator,
+                    4 => self.config.plugins.unit_converter = !self.config.plugins.unit_converter,
+                    5 => self.config.plugins.ssh = !self.config.plugins.ssh,
+                    6 => self.config.plugins.clipboard = !self.config.plugins.clipboard,
+                    7 => self.config.plugins.git = !self.config.plugins.git,
+                    8 => self.config.plugins.docker = !self.config.plugins.docker,
+                    9 => self.config.plugins.systemd = !self.config.plugins.systemd,
+                    10 => self.config.plugins.ai = !self.config.plugins.ai,
+                    _ => {}
+                }
+                // Live reload active plugins list
+                self.plugins = load_all_plugins(&self.config);
+                self.active_plugin_idx = 0; // reset to All tab
+                self.update_search();
+            }
+            6 => {
+                let providers = vec!["openai".to_string(), "gemini".to_string(), "ollama".to_string()];
+                if self.settings_selected_option < providers.len() {
+                    let chosen = providers[self.settings_selected_option].clone();
+                    self.config.plugins.ai_provider = chosen.clone();
+                    
+                    // Set correct default model and completions API URL for the chosen service provider
+                    match chosen.as_str() {
+                        "openai" => {
+                            self.config.plugins.ai_model = "gpt-4o-mini".to_string();
+                            self.config.plugins.ai_api_url = "https://api.openai.com/v1/chat/completions".to_string();
+                        }
+                        "gemini" => {
+                            self.config.plugins.ai_model = "gemini-1.5-flash".to_string();
+                            self.config.plugins.ai_api_url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions".to_string();
+                        }
+                        "ollama" => {
+                            self.config.plugins.ai_model = "llama3".to_string();
+                            self.config.plugins.ai_api_url = "http://localhost:11434/api/generate".to_string();
+                        }
+                        _ => {}
+                    }
+                    
+                    // Reload AI plugin live with new configurations
+                    self.plugins = load_all_plugins(&self.config);
+                }
+            }
+            7 => {
+                let depths = vec![2, 3, 4, 5, 6];
+                if self.settings_selected_option < depths.len() {
+                    self.config.plugins.files_max_depth = depths[self.settings_selected_option];
+                    
+                    // Invalidate the search cache to trigger a fresh walkdir sweep with new depth setting
+                    let cache_file = self.cache_dir.join("files.txt");
+                    let _ = std::fs::remove_file(cache_file);
+                    
+                    // Reload files plugin live
+                    self.plugins = load_all_plugins(&self.config);
+                }
+            }
             _ => {}
         }
 
