@@ -373,7 +373,7 @@ fn draw_settings_screen(
                     "项目版本: v0.1.0 (Rust)".to_string(),
                     "核心协议: MIT License".to_string(),
                     "源码仓库: github.com/aimy1/Rune".to_string(),
-                    "开发团队: Google DeepMind team".to_string(),
+                    "开发作者: aisaniya".to_string(),
                 ]
             } else {
                 vec![
@@ -381,7 +381,7 @@ fn draw_settings_screen(
                     "Version: v0.1.0 (Rust)".to_string(),
                     "License: MIT License".to_string(),
                     "Github: github.com/aimy1/Rune".to_string(),
-                    "Authors: Google DeepMind team".to_string(),
+                    "Author: aisaniya".to_string(),
                 ]
             };
             desc = if is_zh {
