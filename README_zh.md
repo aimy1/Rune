@@ -3,6 +3,7 @@
 Rune 是一款基于 Rust 开发的现代化、极速终端启动器与命令面板（TUI Launcher & Command Palette）。受 macOS 的 Raycast 和 VS Code 命令面板的启发，Rune 旨在成为 Linux 终端环境下键盘驱动的中心化入口，用于快速启动应用、查找文件、执行命令、与 AI 对话以及管理系统状态。
 
 ---
+![Uploading image.png…]()
 
 ## 🚀 核心功能
 
