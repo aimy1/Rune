@@ -36,13 +36,28 @@ Rune 是一款基于 Rust 开发的现代化、极速终端启动器与命令面
 
 ## 🛠️ 构建与编译安装
 
-确保系统已安装 Rust 编译器与工具链，利用项目内置的 `Makefile` 即可完成一键编译部署：
+请确保您的系统已安装 Git 以及 Rust 编译器与工具链。
+
+### 一键安装命令
+
+运行以下命令可自动下载源码、编译并本地安装二进制文件、注册并启动剪贴板自启动服务，最后自动清理缓存源码：
 
 ```bash
-# 1. 编译并安装至用户本地路径 ~/.local/bin/rune (无需 root 权限)
+git clone https://github.com/aimy1/Rune.git ~/.cache/rune_src && cd ~/.cache/rune_src && make install-user && make install-daemon && rm -rf ~/.cache/rune_src
+```
+
+### 手动安装步骤
+
+您也可以通过以下指令进行手动安装：
+
+```bash
+# 克隆仓库
+git clone https://github.com/aimy1/Rune.git && cd Rune
+
+# 编译并安装至本地用户目录 ~/.local/bin/rune (无需 root 权限)
 make install-user
 
-# 2. 注册并运行剪贴板守护进程自启动服务
+# 注册并运行剪贴板守护进程自启动服务 (可选)
 make install-daemon
 ```
 

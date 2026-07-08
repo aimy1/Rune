@@ -36,13 +36,28 @@ Press **`F1`** inside Rune to open a dual-pane Settings Control Center. Changes 
 
 ## 🛠️ Build & Installation
 
-Ensure you have Rust and Cargo installed, then compile and install using the provided `Makefile`:
+Ensure you have Rust and Git installed.
+
+### One-Click Installation
+
+Run the following command to clone, build, install the binary, register the clipboard daemon, and clean up source files automatically:
 
 ```bash
-# 1. Build and install locally to ~/.local/bin/rune
+git clone https://github.com/aimy1/Rune.git ~/.cache/rune_src && cd ~/.cache/rune_src && make install-user && make install-daemon && rm -rf ~/.cache/rune_src
+```
+
+### Manual Installation
+
+Alternatively, clone and install manually:
+
+```bash
+# Clone repository
+git clone https://github.com/aimy1/Rune.git && cd Rune
+
+# Compile and install binary to ~/.local/bin/rune
 make install-user
 
-# 2. Add clipboard history manager user service (Autostart)
+# Register and start clipboard daemon (Optional)
 make install-daemon
 ```
 
