@@ -1,99 +1,127 @@
+<div align="center">
+
 # ᚱ Rune
 
-A modern, lightweight, and blazing-fast Terminal User Interface (TUI) application launcher and command palette for Linux, written in Rust. Inspired by macOS's Raycast and VS Code's command palette, Rune serves as a central, keyboard-driven entry point to launch apps, locate files, run commands, query AI, and configure your system workspace instantly.
+**A blazing-fast TUI application launcher & command palette for Linux, written in Rust.**
+
+*Inspired by Raycast and VS Code's command palette — fully keyboard-driven.*
+
+<br/>
+
+[![Language: Rust](https://img.shields.io/badge/Language-Rust-orange?logo=rust&logoColor=white)](https://www.rust-lang.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Platform: Linux](https://img.shields.io/badge/Platform-Linux-informational?logo=linux&logoColor=white)](https://github.com/aimy1/Rune)
+[![GitHub Stars](https://img.shields.io/github/stars/aimy1/Rune?style=social)](https://github.com/aimy1/Rune/stargazers)
+
+<br/>
+
+**🌐 Language / 语言**
+
+[**English**](README.md) · [**简体中文**](README_zh.md)
+
+</div>
+
+---
+
+## 📖 Overview
+
+Rune is a modern, lightweight, keyboard-driven **TUI launcher** for Linux. It serves as a central command entry point — launch apps, find files, run shell commands, query AI, manage services, and browse clipboard history, all without leaving your terminal.
 
 ---
 
 ## 🚀 Core Features
 
-- 🖥️ **Desktop Applications**: Instantly index and search system `.desktop` files, launching GUI applications in detached background sessions.
-- 📁 **Fuzzy File Search**: Recursively scan directory paths in a background thread. Clicking text files opens them directly inside your preferred terminal editor.
-- 🖼️ **Half-Block Image Preview**: Renders high-quality pixel-art logo overlays and previews directly in the details panel using half-block characters (`▄`, `▀`) and true RGB terminal colors.
-- 🐚 **Command Executor**: Enter system Shell commands for immediate detached background execution or interactive foreground terminal runs.
-- 🧮 **Calculator & Unit Converter**: Dynamically evaluate mathematical expressions and convert physical units (mass, temperature, length) with 4-decimal precision.
-- 🔑 **SSH Launcher**: Read config entries from `~/.ssh/config` for instant SSH connection launches.
-- 📋 **Clipboard Manager**: Runs a Systemd-integrated clipboard monitor daemon to capture clips, letting you search and restore them from history.
-- 🐳 **Docker & Systemd Services**: Live inspect containers (with log previews) and system services, with quick start/restart controls.
-- 🤖 **AI Chatbot**: Talk to LLMs in real-time, supporting OpenAI, Gemini API, and local Ollama server configurations.
-- 🔌 **Shell Script Plugins**: Extend Rune simply by dropping executable scripts (Python, Bash, Node, Go) that output JSON results into the plugins directory.
+| Feature | Description |
+| :---: | :--- |
+| 🖥️ | **App Launcher** — Index & search `.desktop` files; launch GUI apps in detached sessions |
+| 📁 | **Fuzzy File Search** — Background recursive directory scan; click text files to open in your editor |
+| 🖼️ | **Image Preview** — Renders icons & images via half-block characters (`▄`/`▀`) with true RGB colors |
+| 🐚 | **Shell Executor** — Run commands silently in background or interactively in a new terminal |
+| 🧮 | **Calculator & Unit Converter** — Evaluate expressions; convert mass, temperature, length (4 decimal places) |
+| 🔑 | **SSH Launcher** — Parse `~/.ssh/config` and launch SSH sessions instantly |
+| 📋 | **Clipboard Manager** — Systemd-based daemon captures clipboard history; restore entries from a searchable list |
+| 🐳 | **Docker & Systemd** — Inspect containers (with log preview) and system services; start/restart with a keystroke |
+| 🤖 | **AI Chatbot** — Real-time LLM chat; supports OpenAI, Gemini API, and local Ollama |
+| 🔌 | **Script Plugins** — Drop any executable (Python, Bash, Node, Go) into the plugins dir to extend Rune |
 
 ---
 
-## ⚙️ Interactive TUI Control Center (F1)
+## ⚙️ Settings Control Center `F1`
 
-Press **`F1`** inside Rune to open a dual-pane Settings Control Center. Changes are saved instantly to `~/.config/rune/config.toml`:
+Press **`F1`** at any time to open the interactive dual-pane Settings dashboard. All changes are saved instantly to `~/.config/rune/config.toml`.
 
-- **🎨 Live Theme Swapping**: Cycle through Tokyo Night, Catppuccin, Nord, Gruvbox, and Everforest with instant screen updates.
-- **🌐 Bilingual Toggle**: Live switch interface texts between **English (en)** and **简体中文 (zh)**.
-- **📝 Text Editor Routing**: Bind your default terminal editor (`nano`, `vim`, `nvim`, `hx` or custom paths). Text/code files selected in search are automatically opened inside the terminal using this editor.
-- **🔌 Plugins Switchboard**: Toggle any of the 11 functional plugins to instantly rebuild the tabs bar and filter search results.
-- **🤖 AI Provider presets**: Switch between `openai`, `gemini`, and `ollama` providers, auto-populating completions endpoints and model names.
-- **🔑 Credentials Inline Editor**: Hand-write API Keys, Models, and Endpoint URLs directly in the bottom status bar with mask protection.
-- **📂 File Index Depth**: Adjust directory traversal depths (from 2 to 6 layers), automatically flushing old cache files to force an immediate re-sweep.
-- **ℹ️ About Project**: Structured credits page displaying license, repository details, and author name (**aisaniya**).
+| Setting | Details |
+| :---: | :--- |
+| 🎨 | **Live Theme** — Cycle through Tokyo Night, Catppuccin, Nord, Gruvbox, Everforest |
+| 🌐 | **Language** — Toggle interface between **English** and **简体中文** in real-time |
+| 📝 | **Text Editor** — Bind `nano`, `vim`, `nvim`, `hx` or any custom editor path |
+| 🔌 | **Plugin Toggles** — Enable/disable any of the 11 built-in plugins; tab bar rebuilds instantly |
+| 🤖 | **AI Provider** — Switch between `openai`, `gemini`, `ollama`; endpoints & models auto-populate |
+| 🔑 | **Credentials Editor** — Inline-edit API keys, models, and endpoint URLs in the status bar (masked) |
+| 📂 | **File Search Depth** — Set directory traversal depth (2–6 levels); cache auto-flushes on save |
+| ℹ️ | **About** — Version, license, GitHub repo, and author credits |
 
 ---
 
-## 🛠️ Build & Installation
+## 🛠️ Installation
 
-Ensure you have Rust and Git installed.
+> **Prerequisites**: [Rust toolchain](https://rustup.rs/) and Git.
 
-### One-Click Installation
+### ⚡ One-Click Install
 
-Run the following command to clone, build, install the binary, register the clipboard daemon, and clean up source files automatically:
+Clone, build, install the binary, register the clipboard daemon, and auto-clean up in one command:
 
 ```bash
 git clone https://github.com/aimy1/Rune.git ~/.cache/rune_src && cd ~/.cache/rune_src && make install-user && make install-daemon && rm -rf ~/.cache/rune_src
 ```
 
-### Manual Installation
-
-Alternatively, clone and install manually:
+### 🔧 Manual Install
 
 ```bash
-# Clone repository
+# 1. Clone the repository
 git clone https://github.com/aimy1/Rune.git && cd Rune
 
-# Compile and install binary to ~/.local/bin/rune
+# 2. Build & install binary to ~/.local/bin/rune (no root required)
 make install-user
 
-# Register and start clipboard daemon (Optional)
+# 3. Register clipboard daemon as a systemd user service (optional)
 make install-daemon
 ```
 
-Ensure `~/.local/bin` is added to your shell's `PATH` variable. Run Rune directly from your terminal by typing:
-```bash
-rune
-```
+> Make sure `~/.local/bin` is in your `PATH`, then simply run:
+> ```bash
+> rune
+> ```
 
 ---
 
 ## ⌨️ Keybindings
 
-| Key | Description |
+| Key | Action |
 | :--- | :--- |
-| `Char` / `Backspace` | Input query characters / clear text |
-| `Up` / `Down` (or `Ctrl-p`/`n`, `Ctrl-k`/`j`) | Move selection cursor in result lists |
-| `Tab` / `Shift-Tab` | Shift modes / filter search results by active plugin tabs |
-| `Shift-Up` / `Shift-Down` (or `Alt-j`/`k`, `PageUp`/`Down`) | Scroll long text previews |
-| `Enter` | Trigger primary action of selected result |
-| `F1` / `Esc` | Toggle Settings dashboard / Quit launcher |
+| `Char` / `Backspace` | Type / edit search query |
+| `↑` / `↓` &nbsp;·&nbsp; `Ctrl-p/n` &nbsp;·&nbsp; `Ctrl-k/j` | Navigate result list |
+| `Tab` / `Shift-Tab` | Switch active plugin tab |
+| `Shift-↑` / `Shift-↓` &nbsp;·&nbsp; `Alt-j/k` &nbsp;·&nbsp; `PgUp/PgDn` | Scroll preview pane |
+| `Enter` | Execute primary action |
+| `F1` | Open / close Settings dashboard |
+| `Esc` | Close overlay / quit |
 
 ---
 
 ## 🔌 Writing Custom Plugins
 
-Create custom plugins by dropping executable scripts or binaries into `~/.config/rune/plugins/`. Rune executes them with the current query as the first argument (`$1`) and expects a JSON array on `stdout`:
+Drop any executable script or binary into `~/.config/rune/plugins/`. Rune calls it with the current query as `$1` and reads a JSON array from `stdout`:
 
 ```json
 [
   {
-    "id": "unique_id",
-    "title": "Display Title",
-    "subtitle": "Optional Subtitle Description",
+    "id": "my_plugin_result",
+    "title": "Result Title",
+    "subtitle": "Optional subtitle shown below",
     "score": 100,
-    "preview": "# Markdown Title\nThis text is rendered in the preview pane.",
-    "execute_cmd": "command_to_execute",
+    "preview": "# Markdown Preview\nRendered in the right-hand details pane.",
+    "execute_cmd": "some-command",
     "execute_args": ["arg1", "arg2"],
     "run_in_terminal": false
   }
@@ -102,18 +130,32 @@ Create custom plugins by dropping executable scripts or binaries into `~/.config
 
 ---
 
-## 🏛️ Project Directory Structure
+## 🏛️ Project Structure
 
 ```
 src/
-├── main.rs         # CLI argument parser & main entrypoint
+├── main.rs          # CLI entry point & argument parser
 ├── core/
-│   ├── app.rs      # Event coordinator & rendering loop
-│   └── plugin.rs   # Core traits and Context definitions
+│   ├── app.rs       # Main event loop & state coordinator
+│   └── plugin.rs    # Plugin trait definitions & context
 ├── ui/
-│   ├── draw.rs     # TUI view layout drawing (ratatui)
-│   └── theme.rs    # Themes loading system
-├── plugins/        # Core plug-ins registry (Git, Docker, etc.)
-├── search/         # Fuzzy matcher scoring
-└── storage/        # Cache manager & frecency scoring logs
+│   ├── draw.rs      # TUI layout & rendering (ratatui)
+│   └── theme.rs     # Theme loading & palette system
+├── plugins/         # Built-in plugin registry (Apps, Docker, AI, etc.)
+├── search/          # Fuzzy match scoring engine
+└── storage/         # Cache manager & frecency scoring
 ```
+
+---
+
+## 📄 License
+
+This project is licensed under the **MIT License** — see [LICENSE](LICENSE) for details.
+
+---
+
+<div align="center">
+
+Made with ❤️ by **aisaniya** · [GitHub](https://github.com/aimy1/Rune)
+
+</div>
