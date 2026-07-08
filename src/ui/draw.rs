@@ -3,7 +3,7 @@ use crate::ui::ThemeStyles;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph};
+use ratatui::widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph};
 use ratatui::Frame;
 
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
@@ -55,8 +55,6 @@ fn parse_markdown_line(line: &str, theme: &ThemeStyles) -> Line<'static> {
             Style::default().fg(theme.warning).add_modifier(Modifier::BOLD),
         ))
     } else {
-        // Basic bold/italic inline parsing
-        // We can render the line raw for standard text
         Line::from(Span::raw(line.to_string()))
     }
 }
@@ -66,8 +64,9 @@ pub fn draw_app(
     query: &str,
     active_plugin_name: &str,
     results: &[SearchResult],
-    selected_idx: usize,
+    list_state: &mut ListState,
     preview_content: Option<String>,
+    preview_scroll: u16,
     theme: &ThemeStyles,
     status_msg: Option<&str>,
     total_plugins_count: usize,
@@ -79,7 +78,6 @@ pub fn draw_app(
     frame.render_widget(bg_block, size);
 
     // Centered window for a modern look (Spotlight / Raycast style)
-    // If screen is tiny, use full screen
     let area = if size.width > 80 && size.height > 24 {
         centered_rect(80, 80, size)
     } else {
@@ -105,7 +103,7 @@ pub fn draw_app(
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3), // Search Input box (title + border)
+            Constraint::Length(3), // Search Input box
             Constraint::Min(4),    // Search results + preview window
             Constraint::Length(1), // Footer keys
         ])
@@ -141,6 +139,8 @@ pub fn draw_app(
     } else {
         (middle_area, None)
     };
+
+    let selected_idx = list_state.selected().unwrap_or(0);
 
     // Render Search Results List
     let items_list: Vec<ListItem> = results
@@ -197,14 +197,21 @@ pub fn draw_app(
         .block(results_block)
         .style(Style::default().bg(theme.background));
 
-    frame.render_widget(list_widget, left_area);
+    // Stateful render to enable list auto-scrolling
+    frame.render_stateful_widget(list_widget, left_area, list_state);
 
     // Render Preview Box (if available)
     if let Some((r_area, text)) = right_area {
+        let title_str = if preview_scroll > 0 {
+            format!(" Detail Preview [Row {}] ", preview_scroll)
+        } else {
+            " Detail Preview ".to_string()
+        };
+
         let preview_block = Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(theme.border))
-            .title(Span::styled(" Detail Preview ", Style::default().fg(theme.border)));
+            .title(Span::styled(title_str, Style::default().fg(theme.border)));
 
         let mut lines = Vec::new();
         let mut in_code_block = false;
@@ -226,6 +233,7 @@ pub fn draw_app(
 
         let preview_p = Paragraph::new(lines)
             .block(preview_block)
+            .scroll((preview_scroll, 0))
             .style(Style::default().bg(theme.background));
 
         frame.render_widget(preview_p, r_area);
@@ -234,9 +242,14 @@ pub fn draw_app(
     // 3. Render Footer (status line & keybindings helper)
     let footer_text = if let Some(msg) = status_msg {
         Span::styled(msg, Style::default().fg(theme.success).add_modifier(Modifier::BOLD))
+    } else if preview_content.is_some() {
+        Span::styled(
+            " Enter Launch │ Tab Mode │ Shift-↑/↓ Scroll Detail │ Esc Exit ",
+            Style::default().fg(theme.border),
+        )
     } else {
         Span::styled(
-            " Enter Launch │ Tab Next Mode │ Shift-Tab Prev Mode │ Esc Exit ",
+            " Enter Launch │ Tab Mode │ Esc Exit ",
             Style::default().fg(theme.border),
         )
     };

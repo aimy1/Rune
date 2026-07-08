@@ -6,6 +6,7 @@ use crate::ui::{draw_app, ThemeStyles, load_theme};
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen};
 use ratatui::backend::CrosstermBackend;
+use ratatui::widgets::ListState;
 use ratatui::Terminal;
 use std::io;
 use std::path::PathBuf;
@@ -20,6 +21,8 @@ pub struct App {
     query: String,
     results: Vec<SearchResult>,
     selected_idx: usize,
+    list_state: ListState,
+    preview_scroll: u16,
     status_msg: Option<(String, Instant)>,
     cache_dir: PathBuf,
     storage: Storage,
@@ -33,6 +36,9 @@ impl App {
         let plugins = load_all_plugins(&config);
         let storage = Storage::load(&cache_dir);
 
+        let mut list_state = ListState::default();
+        list_state.select(Some(0));
+
         let mut app = Self {
             config,
             theme_styles,
@@ -41,6 +47,8 @@ impl App {
             query: String::new(),
             results: Vec::new(),
             selected_idx: 0,
+            list_state,
+            preview_scroll: 0,
             status_msg: None,
             cache_dir,
             storage,
@@ -91,6 +99,8 @@ impl App {
 
         self.results = combined;
         self.selected_idx = 0; // Reset selection index
+        self.list_state.select(Some(0));
+        self.preview_scroll = 0;
     }
 
     fn handle_key_event(&mut self, key: event::KeyEvent) {
@@ -123,6 +133,25 @@ impl App {
                 }
                 self.update_search();
             }
+            // Scroll preview pane using Shift-Up/Down, PageUp/PageDown, or Alt-j/k
+            KeyCode::PageUp => {
+                self.preview_scroll = self.preview_scroll.saturating_sub(5);
+            }
+            KeyCode::PageDown => {
+                self.preview_scroll = self.preview_scroll.saturating_add(5);
+            }
+            KeyCode::Up if key.modifiers.contains(KeyModifiers::SHIFT) => {
+                self.preview_scroll = self.preview_scroll.saturating_sub(1);
+            }
+            KeyCode::Down if key.modifiers.contains(KeyModifiers::SHIFT) => {
+                self.preview_scroll = self.preview_scroll.saturating_add(1);
+            }
+            KeyCode::Char('k') if key.modifiers.contains(KeyModifiers::ALT) => {
+                self.preview_scroll = self.preview_scroll.saturating_sub(1);
+            }
+            KeyCode::Char('j') if key.modifiers.contains(KeyModifiers::ALT) => {
+                self.preview_scroll = self.preview_scroll.saturating_add(1);
+            }
             // Navigate results list using Arrow keys
             KeyCode::Up => {
                 if !self.results.is_empty() {
@@ -131,11 +160,15 @@ impl App {
                     } else {
                         self.selected_idx -= 1;
                     }
+                    self.list_state.select(Some(self.selected_idx));
+                    self.preview_scroll = 0;
                 }
             }
             KeyCode::Down => {
                 if !self.results.is_empty() {
                     self.selected_idx = (self.selected_idx + 1) % self.results.len();
+                    self.list_state.select(Some(self.selected_idx));
+                    self.preview_scroll = 0;
                 }
             }
             // Alternative navigation using Emacs (Ctrl-p/Ctrl-n) or Vim (Ctrl-k/Ctrl-j) keys
@@ -146,11 +179,15 @@ impl App {
                     } else {
                         self.selected_idx -= 1;
                     }
+                    self.list_state.select(Some(self.selected_idx));
+                    self.preview_scroll = 0;
                 }
             }
             KeyCode::Char('n') | KeyCode::Char('j') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 if !self.results.is_empty() {
                     self.selected_idx = (self.selected_idx + 1) % self.results.len();
+                    self.list_state.select(Some(self.selected_idx));
+                    self.preview_scroll = 0;
                 }
             }
             // Input editing keys
@@ -224,7 +261,7 @@ impl App {
                 None
             };
 
-            let status_msg_str = self.status_msg.as_ref().map(|(m, _)| m.as_str());
+            let status_msg_str = self.status_msg.as_ref().map(|(m, _)| m.clone());
 
             terminal.draw(|f| {
                 draw_app(
@@ -232,10 +269,11 @@ impl App {
                     &self.query,
                     &self.active_plugin_name(),
                     &self.results,
-                    self.selected_idx,
+                    &mut self.list_state,
                     preview_text,
+                    self.preview_scroll,
                     &self.theme_styles,
-                    status_msg_str,
+                    status_msg_str.as_deref(),
                     self.plugins.len(),
                 );
             })?;
