@@ -14,7 +14,7 @@ Rune 是一款基于 Rust 开发的现代化、极速终端启动器与命令面
 
 - **极速响应 (<30ms)**：通过后台异步索引与本地文件缓存机制，实现瞬间冷启动，彻底告别磁盘 IO 带来的卡顿。
 - **键盘优先**：零鼠标依赖，所有的交互与功能皆可通过直观的键盘快捷键触达。
-- **极极简美学**：专业、沉静且无干扰的现代化暗色调界面（内置支持 Tokyo Night, Catppuccin, Nord, Gruvbox 和 Everforest 主题），拒绝花哨的 RGB 赛博朋克风。
+- **极简美学**：专业、沉静且无干扰的现代化暗色调界面（内置支持 Tokyo Night, Catppuccin, Nord, Gruvbox 和 Everforest 主题），拒绝花哨的 RGB 赛博朋克风。
 - **插件化架构**：核心仅提供 TUI 渲染、模糊搜索和主题配置，所有的功能模块（包括应用、文件查找等系统功能）均作为插件实现。
 
 ---
@@ -29,13 +29,30 @@ Rune 是一款基于 Rust 开发的现代化、极速终端启动器与命令面
 - 📋 **剪贴板历史**：自带剪贴板守护进程（Daemon），静默监听剪贴板变更，支持历史条目检索与复原。
 - 🐳 **Docker & Systemd**：无需离开终端即可检索并启停容器（附带容器日志预览）与管理 systemd 系统服务。
 - 🤖 **AI 助手**：深度融合 LLM 接口，支持 OpenAI, Gemini 以及本地 Ollama 模型的流式答复预览。
+- 🖼️ **半像素图像渲染器**：在详情预览面板中，使用半像素字符（`▄`、`▀`）及真彩色 RGB 直接绘制高精度的软件徽标、图标和本地图片。
 - 🔌 **外部脚本插件**：支持以任何语言（Bash, Python, Node, Go 等）编写脚本作为插件放置在配置目录下，实现无限扩展。
+
+---
+
+## ⚙️ 交互式设置面板（按 F1 键）
+
+在 Rune 界面中随时按下 **`F1`** 键，可唤起直观的双栏系统设置管理中心：
+
+1. **🎨 TUI 主题选择**：在 Tokyo Night, Catppuccin, Nord, Gruvbox 和 Everforest 之间一键 live 实时热切换主题，无需重启。
+2. **🌐 语言切换**：支持 **中文 (zh)** 与 **英文 (en)** 的动态热切换，界面的所有面板、页脚提示、操作状态信息会立刻完成翻译翻译。
+3. **📝 默认文本编辑器**：可选 `nano`, `vim`, `nvim`, `hx` 或是手写自定义命令。在搜索结果中点击文本/代码文件时，会自动在终端内调用此编辑器打开。
+4. **🔌 插件开关管理**：对内置的 11 个插件实例进行热插拔开启或禁用，立刻动态生成对应的顶栏模式标签。
+5. **🤖 AI 提供商选择**：选择 AI chatbot 底层服务商（`openai`, `gemini`, `ollama`），系统会自动重载并生成对应服务商的默认补全 URL 与默认模型。
+6. **🔑 行内文本编辑器**：选定选项后直接在底栏状态行中，对 AI 密钥 API Key、自定义模型名称和 API Endpoint URL 等参数进行手写录入，并支持掩码掩护。
+7. **📂 文件搜索深度上限**：设置 Walkdir 扫描的目录层级（支持 2 至 6 层），点击保存时会自动清空旧缓存以重构文件索引。
+8. **ℹ️ 关于 Rune**：查看项目软件的版本号、核心许可协议、GitHub 链接以及作者署名（**aisaniya**）。
 
 ---
 
 ## 🚀 安装与部署
 
 ### 前置要求
+
 确保系统已安装 Rust 编译器与工具链：
 ```bash
 cargo --version
@@ -53,6 +70,8 @@ make install-user
 sudo make install
 ```
 
+请确保 `~/.local/bin` 已加入您的系统环境变量 `PATH` 中。接着即可直接在终端运行 `rune` 启动。
+
 ### 剪贴板守护进程自启动 (可选)
 
 为了在后台自动搜集与整理剪贴板历史记录，您可以将收集守护程序注册并启动为 Systemd 用户服务：
@@ -69,70 +88,16 @@ make uninstall-daemon
 
 ---
 
-## ⚙️ 配置文件
-
-Rune 的配置文件存放于 `~/.config/rune/config.toml`。首次运行会自动生成默认配置：
-
-```toml
-[general]
-shell = "bash"
-editor = "nano"
-
-[theme]
-# 可选的内置主题: "tokyo_night", "catppuccin", "nord", "gruvbox", "everforest"
-# 或是指向自定义主题 TOML 文件的绝对路径
-active = "catppuccin"
-
-[plugins]
-applications = true
-files = true
-commands = true
-calculator = true
-unit_converter = true
-ssh = true
-clipboard = true
-git = true
-docker = false
-systemd = false
-ai = false
-
-# 文件检索配置
-files_paths = ["~"]
-files_ignore = [".git", "node_modules", "target", ".cache"]
-files_max_depth = 4
-
-# AI 接口配置
-ai_provider = "ollama"  # 支持 "openai", "gemini", "ollama"
-ai_api_key = ""
-ai_model = "llama3"
-ai_api_url = "http://localhost:11434/api/generate"
-```
-
-### 自定义主题
-
-主题文件使用十六进制色彩进行配置：
-```toml
-background = "#1e1e2e"
-foreground = "#cdd6f4"
-accent = "#cba6f7"
-border = "#585b70"
-selection = "#313244"
-warning = "#f9e2af"
-success = "#a6e3a1"
-error = "#f38ba8"
-```
-
----
-
-## ⌨️ 快捷键
+## ⌨️ 快捷键说明
 
 | 键位 | 描述 |
 | :--- | :--- |
 | `Char` / `Backspace` | 输入与修改搜索框文本 |
-| `Up` / `Down` (or `Ctrl-p` / `Ctrl-n`) | 在匹配结果列表中上下移动选择项 |
-| `Tab` / `Shift-Tab` | 切换当前激活的插件面板 |
-| `Enter` | 触发执行选中项 of 默认动作 |
-| `Esc` | 关闭退出 Rune |
+| `Up` / `Down` (或 `Ctrl-p`/`n`，`Ctrl-k`/`j`) | 在匹配结果列表中上下移动选择项 |
+| `Tab` / `Shift-Tab` | 切换当前激活的插件面板（模式） |
+| `Shift-Up` / `Shift-Down` (或 `Alt-j`/`k`, `PageUp`/`Down`) | 滚动详情预览区域的长文本内容 |
+| `Enter` | 触发执行选中项的默认动作 |
+| `F1` / `Esc` | 开关系统设置面板 / 退出程序 |
 
 ---
 

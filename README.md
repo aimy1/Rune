@@ -29,7 +29,23 @@ Rune is a modern, blazing-fast Terminal User Interface (TUI) launcher and comman
 - 📋 **Clipboard Manager**: Runs an optional background history collector daemon that archives clips and restores them via search selection.
 - 🐳 **Docker & Systemd**: Lists container statuses (plus log previews) and system services, with options to start/restart.
 - 🤖 **AI Assistant**: Streamlined LLM API call interfaces (supports OpenAI, Gemini, and local Ollama API endpoints).
+- 🖼️ **Half-Block Image Renderer**: Renders high-quality pixel-art application logos and previews directly inside the details panel using half-block characters (`▄`, `▀`) and true RGB terminal colors.
 - 🔌 **Dynamic Extensions**: Easily drop scripts in any language (Bash, Python, Node, Go) that output JSON results into the plugins directory.
+
+---
+
+## ⚙️ Interactive Settings Dashboard (Press F1)
+
+Press **`F1`** inside Rune to open a professional, dual-pane Settings Control Center:
+
+1. **🎨 TUI Theme Selector**: Live switch between Tokyo Night, Catppuccin, Nord, Gruvbox, and Everforest with instant UI redraws.
+2. **🌐 Language Toggle**: Switch between **English (en)** and **Chinese (zh)** dynamically translating all UI headers, status bars, and help texts immediately.
+3. **📝 Default Text Editor**: Choose from `nano`, `vim`, `nvim`, `hx` or input a custom command. Text/code files selected in search are automatically opened inside the terminal using this editor.
+4. **🔌 Active Plugins Manager**: Toggle any of the 11 built-in plugins on-the-fly, dynamically rebuilding tabs and result lists.
+5. **🤖 AI Provider Selector**: Choose your LLM engine (`openai`, `gemini`, `ollama`) to automatically populate default API models and completions endpoints.
+6. **🔑 Credentials Inline Editor**: Hand-write API Keys, Custom Models, and API URLs inside an interactive text editor field in the status bar (with mask protection).
+7. **📂 Files Max Depth Control**: Adjust directory scanning depth (2 to 6 layers), invalidating old index caches on-the-fly.
+8. **ℹ️ About Rune**: View version information, GitHub links, and author credits (**aisaniya**).
 
 ---
 
@@ -54,6 +70,8 @@ make install-user
 sudo make install
 ```
 
+Make sure `~/.local/bin` is in your system `PATH`. You can then run the launcher directly by typing `rune` in your terminal.
+
 ### Clipboard Daemon Autostart (Optional)
 
 To automatically collect clipboard history in the background, register and launch the daemon collector as a Systemd user service:
@@ -70,70 +88,16 @@ make uninstall-daemon
 
 ---
 
-## ⚙️ Configuration
-
-Configurations are stored in `~/.config/rune/config.toml`. It is generated with default options on first launch:
-
-```toml
-[general]
-shell = "bash"
-editor = "nano"
-
-[theme]
-# Active built-in theme: "tokyo_night", "catppuccin", "nord", "gruvbox", "everforest"
-# Or provide the absolute path to a custom theme TOML file
-active = "catppuccin"
-
-[plugins]
-applications = true
-files = true
-commands = true
-calculator = true
-unit_converter = true
-ssh = true
-clipboard = true
-git = true
-docker = false
-systemd = false
-ai = false
-
-# File indexing config
-files_paths = ["~"]
-files_ignore = [".git", "node_modules", "target", ".cache"]
-files_max_depth = 4
-
-# AI integration details
-ai_provider = "ollama"  # "openai", "gemini", "ollama"
-ai_api_key = ""
-ai_model = "llama3"
-ai_api_url = "http://localhost:11434/api/generate"
-```
-
-### Custom Themes
-
-Theme files map colors using standard hex codes:
-```toml
-background = "#1e1e2e"
-foreground = "#cdd6f4"
-accent = "#cba6f7"
-border = "#585b70"
-selection = "#313244"
-warning = "#f9e2af"
-success = "#a6e3a1"
-error = "#f38ba8"
-```
-
----
-
 ## ⌨️ Keybindings
 
 | Key | Description |
 | :--- | :--- |
 | `Char` / `Backspace` | Type and edit active query |
-| `Up` / `Down` (or `Ctrl-p` / `Ctrl-n`) | Navigate list selections |
+| `Up` / `Down` (or `Ctrl-p`/`n` / `Ctrl-k`/`j`) | Navigate list selections |
 | `Tab` / `Shift-Tab` | Shift modes / filter active plugin tabs |
+| `Shift-Up` / `Shift-Down` (or `Alt-j`/`k`, `PageUp`/`Down`) | Scroll preview pane text |
 | `Enter` | Launch selection action |
-| `Esc` | Quit Rune |
+| `F1` / `Esc` | Toggle Settings panel / Close launcher |
 
 ---
 
