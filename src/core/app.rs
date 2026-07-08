@@ -563,7 +563,7 @@ impl App {
 
                     // Find corresponding plugin
                     if let Some(plugin) = self.plugins.iter().find(|p| p.id() == selected_item.plugin_id) {
-                        let mut ctx = Context::new();
+                        let mut ctx = Context::new(self.config.general.editor.clone(), self.config.general.shell.clone());
                         let exec_res = plugin.execute(&selected_item, &mut ctx);
 
                         match exec_res {
@@ -693,7 +693,7 @@ impl App {
                     format!("{} {}", cmd, args.join(" "))
                 };
 
-                let _ = Command::new("sh")
+                let _ = Command::new(&self.config.general.shell)
                     .arg("-c")
                     .arg(format!("{} &", full_cmd))
                     .spawn();

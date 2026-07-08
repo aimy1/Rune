@@ -15,14 +15,18 @@ pub struct Context {
     pub exit_requested: bool,
     pub message: Option<String>,
     pub command_to_run: Option<(String, Vec<String>, bool)>, // (cmd, args, run_in_terminal)
+    pub editor: String,
+    pub shell: String,
 }
 
 impl Context {
-    pub fn new() -> Self {
+    pub fn new(editor: String, shell: String) -> Self {
         Self {
             exit_requested: false,
             message: None,
             command_to_run: None,
+            editor,
+            shell,
         }
     }
 

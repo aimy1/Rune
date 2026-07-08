@@ -300,7 +300,22 @@ impl Plugin for FilesPlugin {
         let real_path = self.resolve_path(display_path);
         let path_str = real_path.to_string_lossy().to_string();
 
-        ctx.run_command("xdg-open".to_string(), vec![path_str], false);
+        let ext = real_path
+            .extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        
+        let is_text = match ext.as_str() {
+            "txt" | "md" | "toml" | "json" | "yaml" | "yml" | "rs" | "py" | "js" | "ts" | "c" | "cpp" | "h" | "sh" | "html" | "css" | "go" | "java" => true,
+            _ => false,
+        };
+
+        if is_text {
+            ctx.run_command(ctx.editor.clone(), vec![path_str], true);
+        } else {
+            ctx.run_command("xdg-open".to_string(), vec![path_str], false);
+        }
         ExecutionResult::Exit
     }
 }
