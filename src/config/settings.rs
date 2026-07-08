@@ -13,6 +13,8 @@ pub struct Config {
 pub struct GeneralConfig {
     pub shell: String,
     pub editor: String,
+    pub language: String,
+    pub font: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -48,6 +50,8 @@ impl Default for Config {
             general: GeneralConfig {
                 shell: "bash".to_string(),
                 editor: "nano".to_string(),
+                language: "zh".to_string(),
+                font: "Monospace".to_string(),
             },
             theme: ThemeConfig {
                 active: "catppuccin".to_string(),
@@ -95,6 +99,15 @@ pub fn get_cache_dir() -> PathBuf {
 }
 
 impl Config {
+    pub fn save(&self) -> Result<(), std::io::Error> {
+        let config_dir = get_config_dir();
+        let config_path = config_dir.join("config.toml");
+        let toml_str = toml::to_string_pretty(self)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        fs::write(config_path, toml_str)?;
+        Ok(())
+    }
+
     pub fn load() -> Self {
         let config_dir = get_config_dir();
         let config_path = config_dir.join("config.toml");

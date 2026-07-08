@@ -28,6 +28,44 @@ pub struct App {
     storage: Storage,
     exit_requested: bool,
     command_to_run: Option<(String, Vec<String>, bool)>, // (cmd, args, in_terminal)
+    // Settings configuration
+    settings_open: bool,
+    settings_focused_pane: usize, // 0 = Categories pane, 1 = Options pane
+    settings_selected_category: usize,
+    settings_selected_option: usize,
+    scanned_fonts: Vec<String>,
+}
+
+fn scan_monospace_fonts() -> Vec<String> {
+    let output = Command::new("fc-list")
+        .args([":spacing=100", "family"])
+        .output();
+    
+    let mut fonts = Vec::new();
+    if let Ok(out) = output {
+        let text = String::from_utf8_lossy(&out.stdout);
+        for line in text.lines() {
+            let parts: Vec<&str> = line.split(',').collect();
+            if let Some(first) = parts.first() {
+                let family = first.split(':').next().unwrap_or(first).trim().to_string();
+                if !family.is_empty() && !fonts.contains(&family) {
+                    fonts.push(family);
+                }
+            }
+        }
+    }
+    
+    if fonts.is_empty() {
+        fonts = vec![
+            "FiraCode Nerd Font".to_string(),
+            "JetBrainsMono Nerd Font".to_string(),
+            "Source Code Pro".to_string(),
+            "Monospace".to_string(),
+        ];
+    }
+    
+    fonts.sort();
+    fonts
 }
 
 impl App {
@@ -38,6 +76,8 @@ impl App {
 
         let mut list_state = ListState::default();
         list_state.select(Some(0));
+
+        let scanned_fonts = scan_monospace_fonts();
 
         let mut app = Self {
             config,
@@ -54,6 +94,11 @@ impl App {
             storage,
             exit_requested: false,
             command_to_run: None,
+            settings_open: false,
+            settings_focused_pane: 0,
+            settings_selected_category: 0,
+            settings_selected_option: 0,
+            scanned_fonts,
         };
 
         app.update_search();
@@ -103,12 +148,161 @@ impl App {
         self.preview_scroll = 0;
     }
 
+    fn get_options_count(&self) -> usize {
+        match self.settings_selected_category {
+            0 => 5, // TUI themes
+            1 => 2, // UI language
+            2 => self.scanned_fonts.len(), // monospace fonts
+            3 => 3, // shell
+            4 => 4, // editor
+            _ => 0,
+        }
+    }
+
+    fn apply_and_save_setting(&mut self) {
+        match self.settings_selected_category {
+            0 => {
+                let themes = vec![
+                    "catppuccin".to_string(),
+                    "tokyo_night".to_string(),
+                    "nord".to_string(),
+                    "gruvbox".to_string(),
+                    "everforest".to_string(),
+                ];
+                if self.settings_selected_option < themes.len() {
+                    let chosen = themes[self.settings_selected_option].clone();
+                    self.config.theme.active = chosen;
+                    // Live theme update!
+                    self.theme_styles = ThemeStyles::from_theme(&load_theme(&self.config.theme.active));
+                }
+            }
+            1 => {
+                let langs = vec!["zh".to_string(), "en".to_string()];
+                if self.settings_selected_option < langs.len() {
+                    let chosen = langs[self.settings_selected_option].clone();
+                    self.config.general.language = chosen;
+                }
+            }
+            2 => {
+                if self.settings_selected_option < self.scanned_fonts.len() {
+                    let chosen = self.scanned_fonts[self.settings_selected_option].clone();
+                    self.config.general.font = chosen;
+                }
+            }
+            3 => {
+                let shells = vec!["bash".to_string(), "zsh".to_string(), "fish".to_string()];
+                if self.settings_selected_option < shells.len() {
+                    let chosen = shells[self.settings_selected_option].clone();
+                    self.config.general.shell = chosen;
+                }
+            }
+            4 => {
+                let editors = vec!["nano".to_string(), "vim".to_string(), "nvim".to_string(), "hx".to_string()];
+                if self.settings_selected_option < editors.len() {
+                    let chosen = editors[self.settings_selected_option].clone();
+                    self.config.general.editor = chosen;
+                }
+            }
+            _ => {}
+        }
+
+        // Save configuration to disk
+        if let Ok(_) = self.config.save() {
+            let is_zh = self.config.general.language == "zh";
+            let msg = if is_zh {
+                "设置已成功保存并实时生效！"
+            } else {
+                "Settings saved and applied successfully!"
+            };
+            self.status_msg = Some((msg.to_string(), Instant::now()));
+        }
+    }
+
     fn handle_key_event(&mut self, key: event::KeyEvent) {
         // Clear message status if too old
         if let Some((_, time)) = self.status_msg {
             if time.elapsed() > Duration::from_secs(3) {
                 self.status_msg = None;
             }
+        }
+
+        // Global F1 key listener for system settings
+        if key.code == KeyCode::F(1) {
+            self.settings_open = !self.settings_open;
+            self.settings_focused_pane = 0;
+            self.settings_selected_category = 0;
+            self.settings_selected_option = 0;
+            return;
+        }
+
+        if self.settings_open {
+            match key.code {
+                KeyCode::Esc => {
+                    self.settings_open = false;
+                }
+                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.settings_open = false;
+                }
+                KeyCode::Left => {
+                    self.settings_focused_pane = 0;
+                }
+                KeyCode::Right => {
+                    self.settings_focused_pane = 1;
+                    self.settings_selected_option = 0;
+                }
+                KeyCode::Tab => {
+                    self.settings_focused_pane = (self.settings_focused_pane + 1) % 2;
+                    if self.settings_focused_pane == 1 {
+                        self.settings_selected_option = 0;
+                    }
+                }
+                KeyCode::BackTab => {
+                    if self.settings_focused_pane == 1 {
+                        self.settings_focused_pane = 0;
+                    } else {
+                        self.settings_focused_pane = 1;
+                        self.settings_selected_option = 0;
+                    }
+                }
+                KeyCode::Up => {
+                    if self.settings_focused_pane == 0 {
+                        if self.settings_selected_category == 0 {
+                            self.settings_selected_category = 4;
+                        } else {
+                            self.settings_selected_category -= 1;
+                        }
+                    } else {
+                        let count = self.get_options_count();
+                        if count > 0 {
+                            if self.settings_selected_option == 0 {
+                                self.settings_selected_option = count - 1;
+                            } else {
+                                self.settings_selected_option -= 1;
+                            }
+                        }
+                    }
+                }
+                KeyCode::Down => {
+                    if self.settings_focused_pane == 0 {
+                        self.settings_selected_category = (self.settings_selected_category + 1) % 5;
+                    } else {
+                        let count = self.get_options_count();
+                        if count > 0 {
+                            self.settings_selected_option = (self.settings_selected_option + 1) % count;
+                        }
+                    }
+                }
+                KeyCode::Enter => {
+                    if self.settings_focused_pane == 1 {
+                        self.apply_and_save_setting();
+                    } else {
+                        self.settings_focused_pane = 1;
+                        self.settings_selected_option = 0;
+                    }
+                }
+                _ => {}
+            }
+            return;
         }
 
         match key.code {
@@ -275,6 +469,16 @@ impl App {
                     &self.theme_styles,
                     status_msg_str.as_deref(),
                     self.plugins.len(),
+                    self.settings_open,
+                    self.settings_focused_pane,
+                    self.settings_selected_category,
+                    self.settings_selected_option,
+                    &self.scanned_fonts,
+                    &self.config.theme.active,
+                    &self.config.general.language,
+                    &self.config.general.font,
+                    &self.config.general.shell,
+                    &self.config.general.editor,
                 );
             })?;
 
