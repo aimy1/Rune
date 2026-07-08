@@ -12,6 +12,14 @@ use std::env;
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
+    // Set panic hook to ensure terminal is cleaned up if the app crashes
+    let original_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic_info| {
+        let _ = crossterm::terminal::disable_raw_mode();
+        let _ = crossterm::execute!(std::io::stdout(), crossterm::terminal::LeaveAlternateScreen);
+        original_hook(panic_info);
+    }));
+
     let args: Vec<String> = env::args().collect();
 
     // Check if running in daemon mode (for clipboard collection)

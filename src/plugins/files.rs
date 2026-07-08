@@ -46,14 +46,30 @@ impl FilesPlugin {
             }
         }
 
-        // 2. Spawn indexing worker
+        // 2. Spawn indexing worker if cache is missing or older than 30 minutes
         let ignore_clone = ignore.clone();
         tokio::spawn(async move {
-            let scanned = Self::scan_files(&paths_resolved, &ignore_clone, max_depth);
-            if !scanned.is_empty() {
-                Self::save_cache(&cache_dir_buf, &scanned);
-                if let Ok(mut guard) = files_clone.write() {
-                    *guard = scanned;
+            let cache_path = cache_dir_buf.join("files.txt");
+            let mut needs_scan = true;
+            if cache_path.exists() {
+                if let Ok(meta) = fs::metadata(&cache_path) {
+                    if let Ok(modified) = meta.modified() {
+                        if let Ok(elapsed) = modified.elapsed() {
+                            if elapsed.as_secs() < 1800 {
+                                needs_scan = false;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if needs_scan {
+                let scanned = Self::scan_files(&paths_resolved, &ignore_clone, max_depth);
+                if !scanned.is_empty() {
+                    Self::save_cache(&cache_dir_buf, &scanned);
+                    if let Ok(mut guard) = files_clone.write() {
+                        *guard = scanned;
+                    }
                 }
             }
         });

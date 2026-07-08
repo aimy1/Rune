@@ -20,3 +20,10 @@ reqwest = { version = "0.11", default-features = false, features = ["json", "str
 evalexpr = "8"
 dirs = "5"
 regex = "1"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
