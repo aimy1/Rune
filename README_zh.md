@@ -33,7 +33,7 @@ Rune 是一款基于 Rust 开发的现代化、极速终端启动器与命令面
 
 ---
 
-## 🚀 快速上手
+## 🚀 安装与部署
 
 ### 前置要求
 确保系统已安装 Rust 编译器与工具链：
@@ -41,19 +41,30 @@ Rune 是一款基于 Rust 开发的现代化、极速终端启动器与命令面
 cargo --version
 ```
 
-### 安装构建
-```bash
-# 编译 Release 版本
-cargo build --release
+### 编译与安装
 
-# 运行 Rune
-./target/release/rune
+我们提供了 `Makefile` 来简化二进制程序的编译与部署：
+
+```bash
+# 1. 编译并安装至用户本地路径 ~/.local/bin/rune (推荐，无需 root 权限)
+make install-user
+
+# 2. 或编译并安装至系统全局路径 /usr/local/bin/rune (需要 sudo 权限)
+sudo make install
 ```
 
-### 剪贴板守护进程 (可选)
-为了实现剪贴板历史的静默采集，可以在桌面系统启动项中以后台守护进程模式启动 Rune：
+### 剪贴板守护进程自启动 (可选)
+
+为了在后台自动搜集与整理剪贴板历史记录，您可以将收集守护程序注册并启动为 Systemd 用户服务：
+
 ```bash
-./target/release/rune --daemon &
+# 自动编译、创建服务、配置开机自启并启动守护服务 rune-daemon.service
+make install-daemon
+```
+
+如需在后续停止并卸载该自启动服务：
+```bash
+make uninstall-daemon
 ```
 
 ---

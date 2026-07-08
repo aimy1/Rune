@@ -123,8 +123,8 @@ impl App {
                 }
                 self.update_search();
             }
-            // Navigate results list
-            KeyCode::Up | KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            // Navigate results list using Arrow keys
+            KeyCode::Up => {
                 if !self.results.is_empty() {
                     if self.selected_idx == 0 {
                         self.selected_idx = self.results.len() - 1;
@@ -133,7 +133,22 @@ impl App {
                     }
                 }
             }
-            KeyCode::Down | KeyCode::Char('n') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            KeyCode::Down => {
+                if !self.results.is_empty() {
+                    self.selected_idx = (self.selected_idx + 1) % self.results.len();
+                }
+            }
+            // Alternative navigation using Emacs (Ctrl-p/Ctrl-n) or Vim (Ctrl-k/Ctrl-j) keys
+            KeyCode::Char('p') | KeyCode::Char('k') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                if !self.results.is_empty() {
+                    if self.selected_idx == 0 {
+                        self.selected_idx = self.results.len() - 1;
+                    } else {
+                        self.selected_idx -= 1;
+                    }
+                }
+            }
+            KeyCode::Char('n') | KeyCode::Char('j') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 if !self.results.is_empty() {
                     self.selected_idx = (self.selected_idx + 1) % self.results.len();
                 }

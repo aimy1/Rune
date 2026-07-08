@@ -33,7 +33,7 @@ Rune is a modern, blazing-fast Terminal User Interface (TUI) launcher and comman
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Installation & Setup
 
 ### Prerequisites
 
@@ -42,22 +42,30 @@ Ensure you have the Rust compiler and toolchain installed:
 cargo --version
 ```
 
-### Installation
+### Build & Installation
 
-Clone the repository and build from source:
+We provide a `Makefile` to simplify binary compilation and deployment:
+
 ```bash
-# Compile for release target
-cargo build --release
+# 1. Build and install locally to ~/.local/bin/rune (No root permissions required)
+make install-user
 
-# Run Rune
-./target/release/rune
+# 2. Or build and install system-wide to /usr/local/bin/rune
+sudo make install
 ```
 
-### Background Clipboard Collector (Optional)
+### Clipboard Daemon Autostart (Optional)
 
-To enable persistent clipboard history logging, launch Rune in daemon mode in the background (e.g. from your WM startup config):
+To automatically collect clipboard history in the background, register and launch the daemon collector as a Systemd user service:
+
 ```bash
-./target/release/rune --daemon &
+# Compile, register, enable, and start rune-daemon.service
+make install-daemon
+```
+
+To stop and uninstall the service later:
+```bash
+make uninstall-daemon
 ```
 
 ---
