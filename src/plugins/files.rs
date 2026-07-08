@@ -272,12 +272,21 @@ impl Plugin for FilesPlugin {
                     Some(preview)
                 }
                 Err(_) => {
-                    // Probably binary
-                    let meta = fs::metadata(&real_path).ok();
-                    let size = meta.map(|m| m.len()).unwrap_or(0);
-                    Some(format!(
-                        "# Binary File: {display_path}\n*Size: {size} bytes*\n\n(Cannot render preview for binary file)",
-                    ))
+                    let ext = real_path.extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
+                    if ext == "png" || ext == "jpg" || ext == "jpeg" || ext == "gif" {
+                        let path_str = real_path.to_string_lossy().to_string();
+                        Some(format!(
+                            "# Image: {}\n[IMAGE: {}]\n",
+                            display_path, path_str
+                        ))
+                    } else {
+                        // Probably binary
+                        let meta = fs::metadata(&real_path).ok();
+                        let size = meta.map(|m| m.len()).unwrap_or(0);
+                        Some(format!(
+                            "# Binary File: {display_path}\n*Size: {size} bytes*\n\n(Cannot render preview for binary file)",
+                        ))
+                    }
                 }
             }
         }

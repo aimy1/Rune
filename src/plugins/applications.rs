@@ -11,12 +11,62 @@ pub struct AppInfo {
     pub name: String,
     pub exec: String,
     pub icon: Option<String>,
+    pub real_icon_path: Option<String>,
     pub comment: Option<String>,
     pub file_path: String,
 }
 
 pub struct ApplicationsPlugin {
     apps: Arc<RwLock<Vec<AppInfo>>>,
+}
+
+fn find_real_icon_path(icon_name: &str) -> Option<PathBuf> {
+    let path = PathBuf::from(icon_name);
+    if path.is_absolute() && path.exists() {
+        return Some(path);
+    }
+
+    // 1. Check /usr/share/pixmaps
+    let pixmaps = PathBuf::from("/usr/share/pixmaps");
+    for ext in &["png", "svg", "xpm"] {
+        let path = pixmaps.join(format!("{}.{}", icon_name, ext));
+        if path.exists() {
+            return Some(path);
+        }
+    }
+
+    // 2. Check system hicolor icon themes
+    let icon_dirs = vec![
+        PathBuf::from("/usr/share/icons/hicolor"),
+        dirs::data_dir()
+            .unwrap_or_else(|| PathBuf::from("/home/fd/.local/share"))
+            .join("icons/hicolor"),
+    ];
+
+    for base_dir in icon_dirs {
+        if !base_dir.exists() {
+            continue;
+        }
+        // Typical resolutions where icons reside
+        let sub_paths = vec![
+            "48x48/apps",
+            "64x64/apps",
+            "128x128/apps",
+            "scalable/apps",
+            "256x256/apps",
+            "512x512/apps",
+        ];
+        for sub in sub_paths {
+            let dir = base_dir.join(sub);
+            for ext in &["png", "svg"] {
+                let path = dir.join(format!("{}.{}", icon_name, ext));
+                if path.exists() {
+                    return Some(path);
+                }
+            }
+        }
+    }
+    None
 }
 
 impl ApplicationsPlugin {
@@ -148,10 +198,13 @@ impl ApplicationsPlugin {
             .collect::<Vec<&str>>()
             .join(" ");
 
+        let real_icon_path = icon.as_ref().and_then(|name| find_real_icon_path(name));
+
         Some(AppInfo {
             name,
             exec: cleaned_exec,
             icon,
+            real_icon_path: real_icon_path.map(|p| p.to_string_lossy().to_string()),
             comment,
             file_path: path.to_string_lossy().to_string(),
         })
@@ -193,6 +246,9 @@ impl Plugin for ApplicationsPlugin {
                 if let Some(ref icon) = app.icon {
                     metadata.insert("icon".to_string(), icon.clone());
                 }
+                if let Some(ref real_icon) = app.real_icon_path {
+                    metadata.insert("real_icon_path".to_string(), real_icon.clone());
+                }
 
                 results.push(SearchResult {
                     id: app.name.clone(),
@@ -210,6 +266,9 @@ impl Plugin for ApplicationsPlugin {
 
     fn preview(&self, item: &SearchResult) -> Option<String> {
         let mut preview = format!("# {}\n\n", item.title);
+        if let Some(real_icon) = item.metadata.get("real_icon_path") {
+            preview.push_str(&format!("[IMAGE: {}]\n\n", real_icon));
+        }
         if let Some(exec) = item.metadata.get("exec") {
             preview.push_str(&format!("**Exec**: `{}`\n", exec));
         }
@@ -217,7 +276,7 @@ impl Plugin for ApplicationsPlugin {
             preview.push_str(&format!("**Comment**: {}\n", comment));
         }
         if let Some(icon) = item.metadata.get("icon") {
-            preview.push_str(&format!("**Icon**: {}\n", icon));
+            preview.push_str(&format!("**Icon Name**: `{}`\n", icon));
         }
         Some(preview)
     }

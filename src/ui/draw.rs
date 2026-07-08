@@ -1,10 +1,96 @@
 use crate::core::plugin::SearchResult;
 use crate::ui::ThemeStyles;
+use image::GenericImageView;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
-use ratatui::style::{Modifier, Style};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph};
 use ratatui::Frame;
+use std::path::Path;
+
+fn draw_image_in_preview(
+    path_str: &str,
+    theme: &ThemeStyles,
+    max_width: u32,
+    max_height: u32,
+) -> Vec<Line<'static>> {
+    let path = Path::new(path_str);
+    if !path.exists() {
+        return vec![Line::from(Span::styled(
+            format!("[Image not found: {}]", path_str),
+            Style::default().fg(theme.error),
+        ))];
+    }
+
+    match image::open(path) {
+        Ok(img) => {
+            let (width, height) = img.dimensions();
+            if width == 0 || height == 0 {
+                return vec![Line::from("[Invalid image dimensions]")];
+            }
+            let aspect = width as f32 / height as f32;
+
+            let mut new_width = max_width;
+            let mut new_height = (new_width as f32 / aspect / 2.0) as u32;
+
+            if new_height > max_height {
+                new_height = max_height;
+                new_width = (new_height as f32 * aspect * 2.0) as u32;
+            }
+
+            if new_width == 0 {
+                new_width = 1;
+            }
+            if new_height == 0 {
+                new_height = 1;
+            }
+
+            let resized = img.resize_exact(
+                new_width,
+                new_height * 2,
+                image::imageops::FilterType::Nearest,
+            );
+            let mut lines = Vec::new();
+
+            for y in (0..new_height * 2).step_by(2) {
+                let mut spans = Vec::new();
+                for x in 0..new_width {
+                    let top_pixel = resized.get_pixel(x, y);
+                    let bottom_pixel = if y + 1 < new_height * 2 {
+                        resized.get_pixel(x, y + 1)
+                    } else {
+                        top_pixel
+                    };
+
+                    let top_alpha = top_pixel[3];
+                    let bottom_alpha = bottom_pixel[3];
+
+                    let top_color = Color::Rgb(top_pixel[0], top_pixel[1], top_pixel[2]);
+                    let bottom_color = Color::Rgb(bottom_pixel[0], bottom_pixel[1], bottom_pixel[2]);
+
+                    if top_alpha < 50 && bottom_alpha < 50 {
+                        spans.push(Span::raw(" "));
+                    } else if top_alpha < 50 {
+                        spans.push(Span::styled("▄", Style::default().fg(bottom_color)));
+                    } else if bottom_alpha < 50 {
+                        spans.push(Span::styled("▀", Style::default().fg(top_color)));
+                    } else {
+                        spans.push(Span::styled(
+                            "▄",
+                            Style::default().bg(top_color).fg(bottom_color),
+                        ));
+                    }
+                }
+                lines.push(Line::from(spans));
+            }
+            lines
+        }
+        Err(e) => vec![Line::from(Span::styled(
+            format!("[Failed to load image: {}]", e),
+            Style::default().fg(theme.error),
+        ))],
+    }
+}
 
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
     let popup_layout = Layout::default()
@@ -308,6 +394,11 @@ pub fn draw_app(
         let mut in_code_block = false;
 
         for line in text.lines() {
+            if line.starts_with("[IMAGE: ") && line.ends_with(']') {
+                let path_str = &line[8..line.len() - 1];
+                lines.extend(draw_image_in_preview(path_str, theme, 36, 12));
+                continue;
+            }
             if line.trim().starts_with("```") {
                 in_code_block = !in_code_block;
                 continue;
