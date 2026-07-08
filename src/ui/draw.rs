@@ -59,6 +59,91 @@ fn parse_markdown_line(line: &str, theme: &ThemeStyles) -> Line<'static> {
     }
 }
 
+fn get_nerd_font_icon(icon_name: &str) -> &'static str {
+    let lower = icon_name.to_lowercase();
+    if lower.contains("firefox") {
+        ""
+    } else if lower.contains("chrome") || lower.contains("chromium") || lower.contains("google") {
+        ""
+    } else if lower.contains("terminal") || lower.contains("console") || lower.contains("kitty") || lower.contains("alacritty") {
+        ""
+    } else if lower.contains("nvim") || lower.contains("neovim") || lower.contains("vim") {
+        ""
+    } else if lower.contains("code") || lower.contains("vscode") {
+        "󰨞"
+    } else if lower.contains("files") || lower.contains("folder") || lower.contains("nautilus") {
+        "📁"
+    } else if lower.contains("spotify") || lower.contains("music") {
+        ""
+    } else if lower.contains("vlc") || lower.contains("video") || lower.contains("player") {
+        "󰕼"
+    } else if lower.contains("settings") || lower.contains("control-center") || lower.contains("gear") {
+        "⚙️"
+    } else if lower.contains("discord") {
+        "󰙯"
+    } else if lower.contains("steam") {
+        "󰓓"
+    } else if lower.contains("git") {
+        ""
+    } else if lower.contains("docker") {
+        "🐳"
+    } else if lower.contains("python") {
+        ""
+    } else if lower.contains("rust") {
+        ""
+    } else if lower.contains("mail") || lower.contains("thunderbird") {
+        "✉️"
+    } else if lower.contains("chat") || lower.contains("message") || lower.contains("telegram") {
+        "💬"
+    } else if lower.contains("image") || lower.contains("gimp") || lower.contains("photo") {
+        "🖼️"
+    } else {
+        "󰀻" // Default app logo
+    }
+}
+
+fn get_plugin_icon(res: &SearchResult) -> &'static str {
+    match res.plugin_id {
+        "applications" => {
+            if let Some(icon_name) = res.metadata.get("icon") {
+                get_nerd_font_icon(icon_name)
+            } else {
+                "󰀻"
+            }
+        }
+        "files" => {
+            let path = res.metadata.get("path").map(|s| s.as_str()).unwrap_or("");
+            if path.ends_with('/') {
+                "📁"
+            } else if path.contains('.') {
+                let ext = path.split('.').last().unwrap_or("").to_lowercase();
+                match ext.as_str() {
+                    "rs" => "",
+                    "py" => "",
+                    "js" | "ts" => "",
+                    "sh" | "bash" => "🐚",
+                    "md" => "📝",
+                    "toml" | "json" | "yaml" | "yml" => "⚙️",
+                    "png" | "jpg" | "jpeg" | "gif" | "svg" => "🖼️",
+                    _ => "📄"
+                }
+            } else {
+                "📄"
+            }
+        }
+        "calculator" => "🧮",
+        "unit_converter" => "󰶱",
+        "ssh" => "🔑",
+        "clipboard" => "📋",
+        "git" => "",
+        "docker" => "🐳",
+        "systemd" => "⚙️",
+        "ai" => "🤖",
+        "commands" => "🐚",
+        _ => "🔌",
+    }
+}
+
 pub fn draw_app(
     frame: &mut Frame,
     query: &str,
@@ -159,15 +244,21 @@ pub fn draw_app(
 
             let mut lines = vec![];
             
-            // Build Title span
+            // Build Title span with Nerd Font logo/icon
             let prefix = if is_selected { "▶ " } else { "  " };
+            let icon = get_plugin_icon(res);
+            
+            let icon_span = Span::styled(
+                format!("{prefix}{icon}  "),
+                Style::default().fg(if is_selected { theme.accent } else { theme.border }),
+            );
             let title_span = Span::styled(
-                format!("{prefix}{}", res.title),
+                res.title.clone(),
                 Style::default().fg(if is_selected { theme.accent } else { theme.foreground }),
             );
             
             // Subtitle or plugin indicator
-            let mut line_spans = vec![title_span];
+            let mut line_spans = vec![icon_span, title_span];
             if let Some(ref sub) = res.subtitle {
                 let sub_truncated = if sub.len() > 45 {
                     format!(" | {}...", &sub[..42])
