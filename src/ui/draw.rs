@@ -145,6 +145,7 @@ fn parse_markdown_line(line: &str, theme: &ThemeStyles) -> Line<'static> {
         Line::from(Span::raw(line.to_string()))
     }
 }
+
 fn draw_settings_screen(
     frame: &mut Frame,
     area: Rect,
@@ -155,6 +156,8 @@ fn draw_settings_screen(
     scanned_fonts: &[String],
     config: &Config,
     status_msg: Option<&str>,
+    settings_input_mode: bool,
+    settings_input_buffer: &str,
 ) {
     let is_zh = config.general.language == "zh";
     let title_text = if is_zh {
@@ -184,7 +187,7 @@ fn draw_settings_screen(
     let left_pane = workspace[0];
     let right_pane = workspace[1];
 
-    // Left Category List (Expanded to 8 categories)
+    // Left Category List (Expanded to 9 categories)
     let categories = if is_zh {
         vec![
             "1. 主题选择 (TUI Theme)",
@@ -194,7 +197,8 @@ fn draw_settings_screen(
             "5. 文本编辑器 (Text Editor)",
             "6. 插件管理 (Active Plugins)",
             "7. AI 提供商 (AI Provider)",
-            "8. 文件搜索深度 (Files Max Depth)",
+            "8. AI 参数配置 (AI Credentials)",
+            "9. 文件搜索深度 (Files Max Depth)",
         ]
     } else {
         vec![
@@ -205,7 +209,8 @@ fn draw_settings_screen(
             "5. Text Editor",
             "6. Active Plugins",
             "7. AI Provider",
-            "8. Files Max Depth",
+            "8. AI Credentials",
+            "9. Files Max Depth",
         ]
     };
 
@@ -296,21 +301,32 @@ fn draw_settings_screen(
             };
         }
         3 => {
-            options = vec!["bash".to_string(), "zsh".to_string(), "fish".to_string()];
+            options = vec![
+                "bash".to_string(),
+                "zsh".to_string(),
+                "fish".to_string(),
+                format!("custom ({})", config.general.shell),
+            ];
             active_val = config.general.shell.clone();
             desc = if is_zh {
-                "设置用于启动后台/前台终端命令行任务的默认 Shell 运行程序。".to_string()
+                "设置默认 Shell。选择最后一项按 Enter 可手动输入自定义的 Shell 路径 (如 /usr/bin/nu)。".to_string()
             } else {
-                "Configure default Shell interpreter used to run foreground or background terminal commands.".to_string()
+                "Configure default shell environment. Select the last option and press Enter to type a custom path.".to_string()
             };
         }
         4 => {
-            options = vec!["nano".to_string(), "vim".to_string(), "nvim".to_string(), "hx".to_string()];
+            options = vec![
+                "nano".to_string(),
+                "vim".to_string(),
+                "nvim".to_string(),
+                "hx".to_string(),
+                format!("custom ({})", config.general.editor),
+            ];
             active_val = config.general.editor.clone();
             desc = if is_zh {
-                "设置打开文本配置、外部修改时调用的默认终端编辑器。".to_string()
+                "设置默认编辑器。选择最后一项按 Enter 可手动输入自定义的编辑器命令。".to_string()
             } else {
-                "Configure default terminal text editor to open configuration or script files.".to_string()
+                "Configure default editor. Select the last option and press Enter to type a custom command.".to_string()
             };
         }
         5 => {
@@ -343,6 +359,24 @@ fn draw_settings_screen(
             };
         }
         7 => {
+            let masked_key = if config.plugins.ai_api_key.is_empty() {
+                "[Not Set]".to_string()
+            } else {
+                let key_len = config.plugins.ai_api_key.len();
+                format!("{}...", &config.plugins.ai_api_key[..std::cmp::min(5, key_len)])
+            };
+            options = vec![
+                format!("API Key: {}", masked_key),
+                format!("Model: {}", config.plugins.ai_model),
+                format!("API URL: {}", config.plugins.ai_api_url),
+            ];
+            desc = if is_zh {
+                "配置 AI 助手的连接参数。选中选项按 Enter 键进入下方文本输入框进行编辑。".to_string()
+            } else {
+                "Configure AI chatbot credentials. Select any item and press Enter to edit in the text prompt below.".to_string()
+            };
+        }
+        8 => {
             options = vec![
                 "2".to_string(),
                 "3".to_string(),
@@ -382,8 +416,12 @@ fn draw_settings_screen(
                     "ai" => config.plugins.ai,
                     _ => false,
                 }
+            } else if settings_selected_category == 7 {
+                false
             } else {
-                opt == &active_val
+                // If it is shell or editor custom value, option has string "custom (xyz)"
+                // We verify if active_val equals xyz or opt equals active_val
+                opt == &active_val || (opt.starts_with("custom (") && opt.contains(&active_val))
             };
             
             let style = if is_focused {
@@ -426,16 +464,36 @@ fn draw_settings_screen(
         .wrap(ratatui::widgets::Wrap { trim: true });
     frame.render_widget(desc_p, desc_pane);
 
-    let status_text = if let Some(msg) = status_msg {
-        Span::styled(msg, Style::default().fg(theme.success).add_modifier(Modifier::BOLD))
+    // Status / Input text block
+    let status_text = if settings_input_mode {
+        let field_label = match settings_selected_category {
+            3 => if is_zh { "编辑 Shell 执行路径: " } else { "Edit Shell Path: " },
+            4 => if is_zh { "编辑编辑器命令: " } else { "Edit Editor Command: " },
+            7 => match settings_selected_option {
+                0 => if is_zh { "编辑 API Key: " } else { "Edit API Key: " },
+                1 => if is_zh { "编辑模型名称 (Model): " } else { "Edit Model: " },
+                2 => if is_zh { "编辑 API URL 终结点: " } else { "Edit API URL: " },
+                _ => "",
+            },
+            _ => "",
+        };
+        
+        Line::from(vec![
+            Span::styled(field_label, Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
+            Span::styled(settings_input_buffer, Style::default().fg(theme.foreground)),
+            Span::styled("█", Style::default().fg(theme.accent)),
+            Span::raw(if is_zh { " [Enter 确认 │ Esc 取消]" } else { " [Enter Save │ Esc Cancel]" }),
+        ])
+    } else if let Some(msg) = status_msg {
+        Line::from(Span::styled(msg, Style::default().fg(theme.success).add_modifier(Modifier::BOLD)))
     } else {
-        Span::styled(
-            if is_zh { "使用 ↑/↓ 移动选择，Enter 确认修改，Esc/F1 关闭" } else { "Use ↑/↓ to navigate, Enter to select, Esc/F1 to close" },
+        Line::from(Span::styled(
+            if is_zh { "使用 ↑/↓ 移动选择，Enter 确认修改/编辑，Esc/F1 关闭" } else { "Use ↑/↓ to navigate, Enter to select/edit, Esc/F1 to close" },
             Style::default().fg(theme.border),
-        )
+        ))
     };
     
-    let status_p = Paragraph::new(Line::from(status_text))
+    let status_p = Paragraph::new(status_text)
         .style(Style::default().bg(theme.background));
     frame.render_widget(status_p, status_pane);
 }
@@ -458,6 +516,8 @@ pub fn draw_app(
     settings_selected_option: usize,
     scanned_fonts: &[String],
     config: &Config,
+    settings_input_mode: bool,
+    settings_input_buffer: &str,
 ) {
     let size = frame.size();
 
@@ -485,6 +545,8 @@ pub fn draw_app(
             scanned_fonts,
             config,
             status_msg,
+            settings_input_mode,
+            settings_input_buffer,
         );
         return;
     }

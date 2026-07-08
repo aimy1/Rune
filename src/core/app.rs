@@ -34,6 +34,8 @@ pub struct App {
     settings_selected_category: usize,
     settings_selected_option: usize,
     scanned_fonts: Vec<String>,
+    settings_input_mode: bool,
+    settings_input_buffer: String,
 }
 
 fn scan_monospace_fonts() -> Vec<String> {
@@ -99,6 +101,8 @@ impl App {
             settings_selected_category: 0,
             settings_selected_option: 0,
             scanned_fonts,
+            settings_input_mode: false,
+            settings_input_buffer: String::new(),
         };
 
         app.update_search();
@@ -153,8 +157,12 @@ impl App {
             0 => 5, // TUI themes
             1 => 2, // UI language
             2 => self.scanned_fonts.len(), // monospace fonts
-            3 => 3, // shell
-            4 => 4, // editor
+            3 => 4, // shell (+ custom)
+            4 => 5, // editor (+ custom)
+            5 => 11, // plugins toggles
+            6 => 3, // AI providers
+            7 => 3, // AI configs (Key, Model, URL)
+            8 => 5, // Files Max Depth
             _ => 0,
         }
     }
@@ -251,7 +259,7 @@ impl App {
                     self.plugins = load_all_plugins(&self.config);
                 }
             }
-            7 => {
+            8 => {
                 let depths = vec![2, 3, 4, 5, 6];
                 if self.settings_selected_option < depths.len() {
                     self.config.plugins.files_max_depth = depths[self.settings_selected_option];
@@ -268,6 +276,51 @@ impl App {
         }
 
         // Save configuration to disk
+        if let Ok(_) = self.config.save() {
+            let is_zh = self.config.general.language == "zh";
+            let msg = if is_zh {
+                "设置已成功保存并实时生效！"
+            } else {
+                "Settings saved and applied successfully!"
+            };
+            self.status_msg = Some((msg.to_string(), Instant::now()));
+        }
+    }
+
+    fn save_custom_input(&mut self) {
+        let input = self.settings_input_buffer.trim().to_string();
+        match self.settings_selected_category {
+            3 => {
+                if !input.is_empty() {
+                    self.config.general.shell = input;
+                }
+            }
+            4 => {
+                if !input.is_empty() {
+                    self.config.general.editor = input;
+                }
+            }
+            7 => {
+                match self.settings_selected_option {
+                    0 => self.config.plugins.ai_api_key = input,
+                    1 => {
+                        if !input.is_empty() {
+                            self.config.plugins.ai_model = input;
+                        }
+                    }
+                    2 => {
+                        if !input.is_empty() {
+                            self.config.plugins.ai_api_url = input;
+                        }
+                    }
+                    _ => {}
+                }
+                // Reload AI plugin live
+                self.plugins = load_all_plugins(&self.config);
+            }
+            _ => {}
+        }
+
         if let Ok(_) = self.config.save() {
             let is_zh = self.config.general.language == "zh";
             let msg = if is_zh {
@@ -297,6 +350,28 @@ impl App {
         }
 
         if self.settings_open {
+            if self.settings_input_mode {
+                match key.code {
+                    KeyCode::Esc => {
+                        self.settings_input_mode = false;
+                        self.settings_input_buffer.clear();
+                    }
+                    KeyCode::Backspace => {
+                        self.settings_input_buffer.pop();
+                    }
+                    KeyCode::Char(c) => {
+                        self.settings_input_buffer.push(c);
+                    }
+                    KeyCode::Enter => {
+                        self.save_custom_input();
+                        self.settings_input_mode = false;
+                        self.settings_input_buffer.clear();
+                    }
+                    _ => {}
+                }
+                return;
+            }
+
             match key.code {
                 KeyCode::Esc => {
                     self.settings_open = false;
@@ -328,7 +403,7 @@ impl App {
                 KeyCode::Up => {
                     if self.settings_focused_pane == 0 {
                         if self.settings_selected_category == 0 {
-                            self.settings_selected_category = 7;
+                            self.settings_selected_category = 8;
                         } else {
                             self.settings_selected_category -= 1;
                         }
@@ -345,7 +420,7 @@ impl App {
                 }
                 KeyCode::Down => {
                     if self.settings_focused_pane == 0 {
-                        self.settings_selected_category = (self.settings_selected_category + 1) % 8;
+                        self.settings_selected_category = (self.settings_selected_category + 1) % 9;
                     } else {
                         let count = self.get_options_count();
                         if count > 0 {
@@ -355,7 +430,29 @@ impl App {
                 }
                 KeyCode::Enter => {
                     if self.settings_focused_pane == 1 {
-                        self.apply_and_save_setting();
+                        let is_custom_trigger = match self.settings_selected_category {
+                            3 => self.settings_selected_option == 3, // Custom Shell
+                            4 => self.settings_selected_option == 4, // Custom Editor
+                            7 => true, // Any AI Config field
+                            _ => false,
+                        };
+                        
+                        if is_custom_trigger {
+                            self.settings_input_mode = true;
+                            self.settings_input_buffer = match self.settings_selected_category {
+                                3 => self.config.general.shell.clone(),
+                                4 => self.config.general.editor.clone(),
+                                7 => match self.settings_selected_option {
+                                    0 => self.config.plugins.ai_api_key.clone(),
+                                    1 => self.config.plugins.ai_model.clone(),
+                                    2 => self.config.plugins.ai_api_url.clone(),
+                                    _ => String::new(),
+                                },
+                                _ => String::new(),
+                            };
+                        } else {
+                            self.apply_and_save_setting();
+                        }
                     } else {
                         self.settings_focused_pane = 1;
                         self.settings_selected_option = 0;
@@ -536,6 +633,8 @@ impl App {
                     self.settings_selected_option,
                     &self.scanned_fonts,
                     &self.config,
+                    self.settings_input_mode,
+                    &self.settings_input_buffer,
                 );
             })?;
 
