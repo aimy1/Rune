@@ -103,6 +103,47 @@ impl Config {
         let _ = fs::create_dir_all(&config_dir);
         let _ = fs::create_dir_all(get_cache_dir());
 
+        // Ensure plugins directory exists
+        let plugins_dir = config_dir.join("plugins");
+        let _ = fs::create_dir_all(&plugins_dir);
+
+        // Seed an example script plugin if missing
+        let example_plugin_path = plugins_dir.join("hello-time.sh");
+        if !example_plugin_path.exists() {
+            let example_content = r##"#!/bin/bash
+# Rune External Plugin Example
+# This script demonstrates the Rune custom plugin JSON schema.
+
+QUERY="$1"
+NOW=$(date +"%Y-%m-%d %H:%M:%S")
+
+cat <<EOF
+[
+  {
+    "id": "hello_time",
+    "title": "Current Date & Time",
+    "subtitle": "$NOW (External script)",
+    "score": 10,
+    "preview": "# Hello Time Plugin\n\n- **Date**: \`$(date +%Y-%m-%d)\`\n- **Time**: \`$(date +%H:%M:%S)\`\n- **Active Search Query**: \`$QUERY\`\n\n*Press Enter to trigger a desktop notification.*",
+    "execute_cmd": "notify-send",
+    "execute_args": ["Rune Hello", "Current time is $NOW"],
+    "run_in_terminal": false
+  }
+]
+EOF
+"##;
+            let _ = fs::write(&example_plugin_path, example_content);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                if let Ok(meta) = fs::metadata(&example_plugin_path) {
+                    let mut perms = meta.permissions();
+                    perms.set_mode(0o755);
+                    let _ = fs::set_permissions(&example_plugin_path, perms);
+                }
+            }
+        }
+
         if !config_path.exists() {
             let default_config = Config::default();
             if let Ok(toml_str) = toml::to_string_pretty(&default_config) {
