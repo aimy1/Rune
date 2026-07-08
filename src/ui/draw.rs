@@ -145,88 +145,88 @@ fn parse_markdown_line(line: &str, theme: &ThemeStyles) -> Line<'static> {
     }
 }
 
-fn get_nerd_font_icon(icon_name: &str) -> &'static str {
+fn get_nerd_font_icon_with_color(icon_name: &str, theme: &ThemeStyles) -> (&'static str, Color) {
     let lower = icon_name.to_lowercase();
     if lower.contains("firefox") {
-        ""
+        ("", Color::Rgb(255, 95, 0)) // Firefox Orange
     } else if lower.contains("chrome") || lower.contains("chromium") || lower.contains("google") {
-        ""
+        ("", Color::Rgb(15, 157, 88)) // Google Green
     } else if lower.contains("terminal") || lower.contains("console") || lower.contains("kitty") || lower.contains("alacritty") {
-        ""
+        ("", Color::Rgb(74, 246, 38)) // Terminal Green
     } else if lower.contains("nvim") || lower.contains("neovim") || lower.contains("vim") {
-        ""
+        ("", Color::Rgb(87, 154, 58)) // Vim Green
     } else if lower.contains("code") || lower.contains("vscode") {
-        "󰨞"
+        ("󰨞", Color::Rgb(0, 122, 255)) // VS Code Blue
     } else if lower.contains("files") || lower.contains("folder") || lower.contains("nautilus") {
-        "📁"
+        ("📁", Color::Rgb(240, 180, 40)) // Folder Yellow
     } else if lower.contains("spotify") || lower.contains("music") {
-        ""
+        ("", Color::Rgb(30, 215, 96)) // Spotify Green
     } else if lower.contains("vlc") || lower.contains("video") || lower.contains("player") {
-        "󰕼"
+        ("󰕼", Color::Rgb(255, 128, 0)) // VLC Orange
     } else if lower.contains("settings") || lower.contains("control-center") || lower.contains("gear") {
-        "⚙️"
+        ("⚙️", Color::Rgb(150, 150, 150)) // Gear Grey
     } else if lower.contains("discord") {
-        "󰙯"
+        ("󰙯", Color::Rgb(88, 101, 242)) // Discord Blurple
     } else if lower.contains("steam") {
-        "󰓓"
+        ("󰓓", Color::Rgb(102, 192, 244)) // Steam Cyan
     } else if lower.contains("git") {
-        ""
+        ("", Color::Rgb(240, 80, 50)) // Git Orange
     } else if lower.contains("docker") {
-        "🐳"
+        ("🐳", Color::Rgb(13, 184, 253)) // Docker Cyan
     } else if lower.contains("python") {
-        ""
+        ("", Color::Rgb(255, 224, 130)) // Python Yellow
     } else if lower.contains("rust") {
-        ""
+        ("", Color::Rgb(222, 165, 132)) // Rust Orange
     } else if lower.contains("mail") || lower.contains("thunderbird") {
-        "✉️"
+        ("✉️", Color::Rgb(240, 100, 100)) // Mail Red
     } else if lower.contains("chat") || lower.contains("message") || lower.contains("telegram") {
-        "💬"
+        ("💬", Color::Rgb(0, 136, 204)) // Chat Blue
     } else if lower.contains("image") || lower.contains("gimp") || lower.contains("photo") {
-        "🖼️"
+        ("🖼️", Color::Rgb(180, 100, 240)) // Image Purple
     } else {
-        "󰀻" // Default app logo
+        ("󰀻", theme.accent) // Default app logo
     }
 }
 
-fn get_plugin_icon(res: &SearchResult) -> &'static str {
+fn get_plugin_icon_with_color(res: &SearchResult, theme: &ThemeStyles) -> (&'static str, Color) {
     match res.plugin_id {
         "applications" => {
             if let Some(icon_name) = res.metadata.get("icon") {
-                get_nerd_font_icon(icon_name)
+                get_nerd_font_icon_with_color(icon_name, theme)
             } else {
-                "󰀻"
+                ("󰀻", theme.accent)
             }
         }
         "files" => {
             let path = res.metadata.get("path").map(|s| s.as_str()).unwrap_or("");
             if path.ends_with('/') {
-                "📁"
+                ("📁", Color::Rgb(240, 180, 40))
             } else if path.contains('.') {
                 let ext = path.split('.').last().unwrap_or("").to_lowercase();
                 match ext.as_str() {
-                    "rs" => "",
-                    "py" => "",
-                    "js" | "ts" => "",
-                    "sh" | "bash" => "🐚",
-                    "md" => "📝",
-                    "toml" | "json" | "yaml" | "yml" => "⚙️",
-                    "png" | "jpg" | "jpeg" | "gif" | "svg" => "🖼️",
-                    _ => "📄"
+                    "rs" => ("", Color::Rgb(183, 65, 14)),
+                    "py" => ("", Color::Rgb(55, 118, 171)),
+                    "js" | "ts" => ("", Color::Rgb(247, 223, 30)),
+                    "sh" | "bash" => ("🐚", Color::Rgb(0, 255, 128)),
+                    "md" => ("📝", Color::Rgb(0, 122, 255)),
+                    "toml" | "json" | "yaml" | "yml" => ("⚙️", Color::Rgb(150, 150, 150)),
+                    "png" | "jpg" | "jpeg" | "gif" | "svg" => ("🖼️", Color::Rgb(180, 100, 240)),
+                    _ => ("📄", theme.foreground)
                 }
             } else {
-                "📄"
+                ("📄", theme.foreground)
             }
         }
-        "calculator" => "🧮",
-        "unit_converter" => "󰶱",
-        "ssh" => "🔑",
-        "clipboard" => "📋",
-        "git" => "",
-        "docker" => "🐳",
-        "systemd" => "⚙️",
-        "ai" => "🤖",
-        "commands" => "🐚",
-        _ => "🔌",
+        "calculator" => ("🧮", Color::Rgb(200, 80, 180)),
+        "unit_converter" => ("󰶱", Color::Rgb(0, 200, 200)),
+        "ssh" => ("🔑", Color::Rgb(240, 200, 0)),
+        "clipboard" => ("📋", Color::Rgb(0, 200, 100)),
+        "git" => ("", Color::Rgb(240, 80, 50)),
+        "docker" => ("🐳", Color::Rgb(13, 184, 253)),
+        "systemd" => ("⚙️", Color::Rgb(150, 150, 150)),
+        "ai" => ("🤖", Color::Rgb(255, 100, 100)),
+        "commands" => ("🐚", Color::Rgb(128, 255, 128)),
+        _ => ("🔌", theme.accent),
     }
 }
 
@@ -330,13 +330,13 @@ pub fn draw_app(
 
             let mut lines = vec![];
             
-            // Build Title span with Nerd Font logo/icon
+            // Build Title span with brand-colored Nerd Font logo/icon
             let prefix = if is_selected { "▶ " } else { "  " };
-            let icon = get_plugin_icon(res);
+            let (icon, icon_color) = get_plugin_icon_with_color(res, theme);
             
             let icon_span = Span::styled(
                 format!("{prefix}{icon}  "),
-                Style::default().fg(if is_selected { theme.accent } else { theme.border }),
+                Style::default().fg(icon_color),
             );
             let title_span = Span::styled(
                 res.title.clone(),
