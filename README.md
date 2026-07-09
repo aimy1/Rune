@@ -1,4 +1,4 @@
-<img width="2296" height="1353" alt="屏幕截图_20260709_104210" src="https://github.com/user-attachments/assets/4e573446-d9a2-4bd1-8e48-493ab6c26568" /><div align="center">
+
  
  # ᚱ Rune
  
