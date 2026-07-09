@@ -1,6 +1,4 @@
-<img width="2397" height="1432" alt="屏幕截图_20260709_103741" src="https://github.com/user-attachments/assets/847569e2-c69f-4dd3-8025-f341f285a1eb" />
-<div align="center">
- 
+
  # ᚱ Rune
  
  **基于 Rust 构建的极速 TUI 应用启动器与命令面板，专为 Linux 打造。**
