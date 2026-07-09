@@ -19,10 +19,9 @@
  [**English**](README.md) · [**简体中文**](README_zh.md)
  
  </div>
- <img width="2346" height="1425" alt="屏幕截图_20260709_103943" src="https://github.com/user-attachments/assets/ed96d938-93f3-4755-b499-5e7ff3feedde" />
-
  ---
- 
+ <img width="2346" height="1425" alt="屏幕截图_20260709_103943" src="https://github.com/user-attachments/assets/5bf2a663-63e9-4be2-8ac0-f2fc7fbf72df" />
+
  ## 📖 项目简介
  
  Rune 是一款现代化、轻量级、全键盘驱动的 **TUI 启动器**，专为 Linux 终端环境设计。它作为统一的命令入口，涵盖应用启动、文件浏览、Shell 命令执行、AI 对话、服务管理与剪贴板历史管理，无需离开终端即可完成一切。
