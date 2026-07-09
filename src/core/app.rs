@@ -36,6 +36,8 @@ pub struct App {
     scanned_fonts: Vec<String>,
     settings_input_mode: bool,
     settings_input_buffer: String,
+    file_manager: crate::plugins::FileManagerPlugin,
+    file_manager_open: bool,
 }
 
 fn scan_monospace_fonts() -> Vec<String> {
@@ -103,6 +105,8 @@ impl App {
             scanned_fonts,
             settings_input_mode: false,
             settings_input_buffer: String::new(),
+            file_manager: crate::plugins::FileManagerPlugin::new(),
+            file_manager_open: false,
         };
 
         app.update_search();
@@ -118,6 +122,13 @@ impl App {
     }
 
     fn update_search(&mut self) {
+        if self.file_manager_open {
+            self.results = self.file_manager.search(&self.query, &self.cache_dir);
+            self.selected_idx = 0;
+            self.list_state.select(Some(0));
+            self.preview_scroll = 0;
+            return;
+        }
         let mut combined = Vec::new();
         let query = &self.query;
 
@@ -157,7 +168,7 @@ impl App {
             0 => 5, // TUI themes
             1 => 2, // UI language
             2 => 5, // editor (+ custom)
-            3 => 11, // plugins toggles
+            3 => 14, // plugins toggles (updated from 13 to 14)
             4 => 3, // AI providers
             5 => 3, // AI configs (Key, Model, URL)
             6 => 5, // Files Max Depth
@@ -202,15 +213,18 @@ impl App {
                 match self.settings_selected_option {
                     0 => self.config.plugins.applications = !self.config.plugins.applications,
                     1 => self.config.plugins.files = !self.config.plugins.files,
-                    2 => self.config.plugins.commands = !self.config.plugins.commands,
-                    3 => self.config.plugins.calculator = !self.config.plugins.calculator,
-                    4 => self.config.plugins.unit_converter = !self.config.plugins.unit_converter,
-                    5 => self.config.plugins.ssh = !self.config.plugins.ssh,
-                    6 => self.config.plugins.clipboard = !self.config.plugins.clipboard,
-                    7 => self.config.plugins.git = !self.config.plugins.git,
-                    8 => self.config.plugins.docker = !self.config.plugins.docker,
-                    9 => self.config.plugins.systemd = !self.config.plugins.systemd,
-                    10 => self.config.plugins.ai = !self.config.plugins.ai,
+                    2 => self.config.plugins.file_manager = !self.config.plugins.file_manager,
+                    3 => self.config.plugins.commands = !self.config.plugins.commands,
+                    4 => self.config.plugins.calculator = !self.config.plugins.calculator,
+                    5 => self.config.plugins.unit_converter = !self.config.plugins.unit_converter,
+                    6 => self.config.plugins.ssh = !self.config.plugins.ssh,
+                    7 => self.config.plugins.clipboard = !self.config.plugins.clipboard,
+                    8 => self.config.plugins.git = !self.config.plugins.git,
+                    9 => self.config.plugins.docker = !self.config.plugins.docker,
+                    10 => self.config.plugins.systemd = !self.config.plugins.systemd,
+                    11 => self.config.plugins.ai = !self.config.plugins.ai,
+                    12 => self.config.plugins.process = !self.config.plugins.process,
+                    13 => self.config.plugins.network = !self.config.plugins.network,
                     _ => {}
                 }
                 // Live reload active plugins list
@@ -324,9 +338,25 @@ impl App {
         // Global F1 key listener for system settings
         if key.code == KeyCode::F(1) {
             self.settings_open = !self.settings_open;
+            if self.settings_open {
+                self.file_manager_open = false;
+            }
             self.settings_focused_pane = 0;
             self.settings_selected_category = 0;
             self.settings_selected_option = 0;
+            self.query.clear();
+            self.update_search();
+            return;
+        }
+
+        // Global F2 key listener for file manager
+        if key.code == KeyCode::F(2) && self.config.plugins.file_manager {
+            self.file_manager_open = !self.file_manager_open;
+            if self.file_manager_open {
+                self.settings_open = false;
+            }
+            self.query.clear();
+            self.update_search();
             return;
         }
 
@@ -364,21 +394,22 @@ impl App {
                     self.settings_focused_pane = 0;
                 }
                 KeyCode::Right => {
-                    self.settings_focused_pane = 1;
-                    self.settings_selected_option = 0;
+                    if self.settings_selected_category != 7 {
+                        self.settings_focused_pane = 1;
+                    }
                 }
                 KeyCode::Tab => {
-                    self.settings_focused_pane = (self.settings_focused_pane + 1) % 2;
-                    if self.settings_focused_pane == 1 {
-                        self.settings_selected_option = 0;
+                    if self.settings_selected_category != 7 {
+                        self.settings_focused_pane = (self.settings_focused_pane + 1) % 2;
+                    } else {
+                        self.settings_focused_pane = 0;
                     }
                 }
                 KeyCode::BackTab => {
-                    if self.settings_focused_pane == 1 {
-                        self.settings_focused_pane = 0;
+                    if self.settings_selected_category != 7 {
+                        self.settings_focused_pane = (self.settings_focused_pane + 1) % 2;
                     } else {
-                        self.settings_focused_pane = 1;
-                        self.settings_selected_option = 0;
+                        self.settings_focused_pane = 0;
                     }
                 }
                 KeyCode::Up => {
@@ -388,6 +419,7 @@ impl App {
                         } else {
                             self.settings_selected_category -= 1;
                         }
+                        self.settings_selected_option = 0;
                     } else {
                         let count = self.get_options_count();
                         if count > 0 {
@@ -402,6 +434,7 @@ impl App {
                 KeyCode::Down => {
                     if self.settings_focused_pane == 0 {
                         self.settings_selected_category = (self.settings_selected_category + 1) % 8;
+                        self.settings_selected_option = 0;
                     } else {
                         let count = self.get_options_count();
                         if count > 0 {
@@ -444,9 +477,83 @@ impl App {
             return;
         }
 
+        // Let the active plugin intercept the key if it wants to!
+        if self.file_manager_open {
+            let selected_item = if !self.results.is_empty() && self.selected_idx < self.results.len() {
+                Some(&self.results[self.selected_idx])
+            } else {
+                None
+            };
+
+            let mut ctx = Context::new(self.config.general.editor.clone(), self.config.general.shell.clone());
+            if self.file_manager.handle_key(key, &self.query, selected_item, &mut ctx) {
+                if ctx.exit_requested {
+                    self.exit_requested = true;
+                    if let Some((cmd, args, in_term)) = ctx.command_to_run {
+                        self.command_to_run = Some((cmd, args, in_term));
+                    }
+                }
+                if let Some(msg) = ctx.message {
+                    self.status_msg = Some((msg, Instant::now()));
+                }
+                if let Some(new_q) = ctx.new_query {
+                    self.query = new_q;
+                }
+                if ctx.refresh_search {
+                    self.update_search();
+                    if let Some(ref target) = ctx.focus_target {
+                        if let Some(pos) = self.results.iter().position(|r| &r.title == target) {
+                            self.selected_idx = pos;
+                            self.list_state.select(Some(pos));
+                        }
+                    }
+                }
+                return;
+            }
+        } else if self.active_plugin_idx > 0 {
+            let plugin = &self.plugins[self.active_plugin_idx - 1];
+            let selected_item = if !self.results.is_empty() && self.selected_idx < self.results.len() {
+                Some(&self.results[self.selected_idx])
+            } else {
+                None
+            };
+
+            let mut ctx = Context::new(self.config.general.editor.clone(), self.config.general.shell.clone());
+            if plugin.handle_key(key, &self.query, selected_item, &mut ctx) {
+                if ctx.exit_requested {
+                    self.exit_requested = true;
+                    if let Some((cmd, args, in_term)) = ctx.command_to_run {
+                        self.command_to_run = Some((cmd, args, in_term));
+                    }
+                }
+                if let Some(msg) = ctx.message {
+                    self.status_msg = Some((msg, Instant::now()));
+                }
+                if let Some(new_q) = ctx.new_query {
+                    self.query = new_q;
+                }
+                if ctx.refresh_search {
+                    self.update_search();
+                    if let Some(ref target) = ctx.focus_target {
+                        if let Some(pos) = self.results.iter().position(|r| &r.title == target) {
+                            self.selected_idx = pos;
+                            self.list_state.select(Some(pos));
+                        }
+                    }
+                }
+                return;
+            }
+        }
+
         match key.code {
             KeyCode::Esc => {
-                self.exit_requested = true;
+                if self.file_manager_open {
+                    self.file_manager_open = false;
+                    self.query.clear();
+                    self.update_search();
+                } else {
+                    self.exit_requested = true;
+                }
             }
             KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.exit_requested = true;
@@ -543,7 +650,13 @@ impl App {
                     self.storage.save(&self.cache_dir);
 
                     // Find corresponding plugin
-                    if let Some(plugin) = self.plugins.iter().find(|p| p.id() == selected_item.plugin_id) {
+                    let plugin_opt: Option<&dyn Plugin> = if self.file_manager_open && selected_item.plugin_id == "file_manager" {
+                        Some(&self.file_manager)
+                    } else {
+                        self.plugins.iter().find(|p| p.id() == selected_item.plugin_id).map(|p| p.as_ref())
+                    };
+
+                    if let Some(plugin) = plugin_opt {
                         let mut ctx = Context::new(self.config.general.editor.clone(), self.config.general.shell.clone());
                         let exec_res = plugin.execute(&selected_item, &mut ctx);
 
@@ -560,6 +673,12 @@ impl App {
                             }
                             ExecutionResult::Success => {
                                 // Keep open
+                                if let Some(new_q) = ctx.new_query {
+                                    self.query = new_q;
+                                }
+                                if ctx.refresh_search {
+                                    self.update_search();
+                                }
                             }
                             ExecutionResult::Message(msg) => {
                                 self.status_msg = Some((msg, Instant::now()));
@@ -584,7 +703,14 @@ impl App {
 
         while !self.exit_requested {
             // Draw UI
-            let preview_text = if !self.results.is_empty() && self.selected_idx < self.results.len() {
+            let preview_text = if self.file_manager_open {
+                if !self.results.is_empty() && self.selected_idx < self.results.len() {
+                    let res = &self.results[self.selected_idx];
+                    self.file_manager.preview(res)
+                } else {
+                    None
+                }
+            } else if !self.results.is_empty() && self.selected_idx < self.results.len() {
                 let res = &self.results[self.selected_idx];
                 self.plugins
                     .iter()
@@ -616,6 +742,7 @@ impl App {
                     &self.config,
                     self.settings_input_mode,
                     &self.settings_input_buffer,
+                    self.file_manager_open,
                 );
             })?;
 

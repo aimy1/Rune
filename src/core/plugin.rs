@@ -17,6 +17,9 @@ pub struct Context {
     pub command_to_run: Option<(String, Vec<String>, bool)>, // (cmd, args, run_in_terminal)
     pub editor: String,
     pub shell: String,
+    pub new_query: Option<String>,
+    pub refresh_search: bool,
+    pub focus_target: Option<String>,
 }
 
 impl Context {
@@ -27,6 +30,9 @@ impl Context {
             command_to_run: None,
             editor,
             shell,
+            new_query: None,
+            refresh_search: false,
+            focus_target: None,
         }
     }
 
@@ -65,4 +71,15 @@ pub trait Plugin: Send + Sync {
 
     // Run action for selected search result
     fn execute(&self, item: &SearchResult, ctx: &mut Context) -> ExecutionResult;
+
+    // Handle custom keypresses. Returns true if handled.
+    fn handle_key(
+        &self,
+        _key: crossterm::event::KeyEvent,
+        _query: &str,
+        _selected_item: Option<&SearchResult>,
+        _ctx: &mut Context,
+    ) -> bool {
+        false
+    }
 }

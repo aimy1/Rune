@@ -5,11 +5,14 @@ pub mod commands;
 pub mod docker;
 pub mod external;
 pub mod files;
+pub mod file_manager;
 pub mod git;
 pub mod ssh;
 pub mod clipboard;
 pub mod systemd;
 pub mod unit_converter;
+pub mod process;
+pub mod network;
 
 pub use ai::AiPlugin;
 pub use applications::ApplicationsPlugin;
@@ -18,11 +21,14 @@ pub use commands::CommandsPlugin;
 pub use docker::DockerPlugin;
 pub use external::ExternalPlugin;
 pub use files::FilesPlugin;
+pub use file_manager::FileManagerPlugin;
 pub use git::GitPlugin;
 pub use ssh::SshPlugin;
 pub use clipboard::{ClipboardPlugin, run_clipboard_daemon};
 pub use systemd::SystemdPlugin;
 pub use unit_converter::UnitConverterPlugin;
+pub use process::ProcessPlugin;
+pub use network::NetworkPlugin;
 
 use crate::config::{Config, get_cache_dir, get_config_dir};
 use crate::core::plugin::Plugin;
@@ -74,6 +80,12 @@ pub fn load_all_plugins(config: &Config) -> Vec<Box<dyn Plugin>> {
             config.plugins.ai_model.clone(),
             config.plugins.ai_api_url.clone(),
         )));
+    }
+    if config.plugins.process {
+        plugins.push(Box::new(ProcessPlugin::new()));
+    }
+    if config.plugins.network {
+        plugins.push(Box::new(NetworkPlugin::new()));
     }
 
     // 2. Load external plugins from ~/.config/rune/plugins/

@@ -26,6 +26,7 @@ pub struct ThemeConfig {
 pub struct PluginsConfig {
     pub applications: bool,
     pub files: bool,
+    pub file_manager: bool,
     pub commands: bool,
     pub calculator: bool,
     pub unit_converter: bool,
@@ -35,6 +36,8 @@ pub struct PluginsConfig {
     pub docker: bool,
     pub systemd: bool,
     pub ai: bool,
+    pub process: bool,
+    pub network: bool,
     pub files_paths: Vec<String>,
     pub files_ignore: Vec<String>,
     pub files_max_depth: usize,
@@ -59,6 +62,7 @@ impl Default for Config {
             plugins: PluginsConfig {
                 applications: true,
                 files: true,
+                file_manager: true,
                 commands: true,
                 calculator: true,
                 unit_converter: true,
@@ -68,6 +72,8 @@ impl Default for Config {
                 docker: false,
                 systemd: false,
                 ai: false,
+                process: true,
+                network: true,
                 files_paths: vec!["~".to_string()],
                 files_ignore: vec![
                     ".git".to_string(),
