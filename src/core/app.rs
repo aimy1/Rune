@@ -807,6 +807,8 @@ impl App {
                         let _ = Command::new(&self.config.general.shell)
                             .arg("-c")
                             .arg(format!("{} &", full_cmd))
+                            .stdout(std::process::Stdio::null())
+                            .stderr(std::process::Stdio::null())
                             .spawn();
                         let msg = format!("Launched: {}", full_cmd);
                         self.status_msg = Some((msg, Instant::now()));
@@ -852,6 +854,8 @@ impl App {
                 let _ = Command::new(&self.config.general.shell)
                     .arg("-c")
                     .arg(format!("{} &", full_cmd))
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
                     .spawn();
             }
         }
