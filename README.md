@@ -23,6 +23,7 @@
  
  ---
  <img width="2323" height="1386" alt="屏幕截图_20260709_104146" src="https://github.com/user-attachments/assets/efefd1ee-4bc2-4183-9958-5315502e9fd5" />
+<img width="2296" height="1353" alt="屏幕截图_20260709_104210" src="https://github.com/user-attachments/assets/4fe414e6-a15a-4693-be64-a9f4a18488ca" />
 
  ## 📖 Overview
  
