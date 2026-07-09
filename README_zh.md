@@ -19,7 +19,8 @@
  [**English**](README.md) · [**简体中文**](README_zh.md)
  
  </div>
- 
+ <img width="2346" height="1425" alt="屏幕截图_20260709_103943" src="https://github.com/user-attachments/assets/ed96d938-93f3-4755-b499-5e7ff3feedde" />
+
  ---
  
  ## 📖 项目简介
