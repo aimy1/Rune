@@ -38,6 +38,7 @@ pub struct App {
     settings_input_buffer: String,
     file_manager: crate::plugins::FileManagerPlugin,
     file_manager_open: bool,
+    main_focus_pane: usize,
 }
 
 fn scan_monospace_fonts() -> Vec<String> {
@@ -107,6 +108,7 @@ impl App {
             settings_input_buffer: String::new(),
             file_manager: crate::plugins::FileManagerPlugin::new(),
             file_manager_open: false,
+            main_focus_pane: 0,
         };
 
         app.update_search();
@@ -488,9 +490,10 @@ impl App {
             let mut ctx = Context::new(self.config.general.editor.clone(), self.config.general.shell.clone());
             if self.file_manager.handle_key(key, &self.query, selected_item, &mut ctx) {
                 if ctx.exit_requested {
-                    self.exit_requested = true;
                     if let Some((cmd, args, in_term)) = ctx.command_to_run {
                         self.command_to_run = Some((cmd, args, in_term));
+                    } else {
+                        self.exit_requested = true;
                     }
                 }
                 if let Some(msg) = ctx.message {
@@ -521,9 +524,10 @@ impl App {
             let mut ctx = Context::new(self.config.general.editor.clone(), self.config.general.shell.clone());
             if plugin.handle_key(key, &self.query, selected_item, &mut ctx) {
                 if ctx.exit_requested {
-                    self.exit_requested = true;
                     if let Some((cmd, args, in_term)) = ctx.command_to_run {
                         self.command_to_run = Some((cmd, args, in_term));
+                    } else {
+                        self.exit_requested = true;
                     }
                 }
                 if let Some(msg) = ctx.message {
@@ -558,19 +562,26 @@ impl App {
             KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.exit_requested = true;
             }
-            // Tab to switch active plugin tabs
+            // Tab to switch focus between Search input box and results list
             KeyCode::Tab => {
-                let count = self.plugins.len() + 1; // +1 for "All" tab
-                self.active_plugin_idx = (self.active_plugin_idx + 1) % count;
-                self.update_search();
+                self.main_focus_pane = (self.main_focus_pane + 1) % 2;
             }
             KeyCode::BackTab => {
-                let count = self.plugins.len() + 1;
+                self.main_focus_pane = if self.main_focus_pane == 0 { 1 } else { 0 };
+            }
+            // Left/Right arrow keys to switch active plugin tabs
+            KeyCode::Left => {
+                let count = self.plugins.len() + 1; // +1 for "All" tab
                 if self.active_plugin_idx == 0 {
                     self.active_plugin_idx = count - 1;
                 } else {
                     self.active_plugin_idx -= 1;
                 }
+                self.update_search();
+            }
+            KeyCode::Right => {
+                let count = self.plugins.len() + 1; // +1 for "All" tab
+                self.active_plugin_idx = (self.active_plugin_idx + 1) % count;
                 self.update_search();
             }
             // Scroll preview pane using Shift-Up/Down, PageUp/PageDown, or Alt-j/k
@@ -662,13 +673,13 @@ impl App {
 
                         match exec_res {
                             ExecutionResult::Exit => {
-                                self.exit_requested = true;
                                 if let Some((cmd, args, in_term)) = ctx.command_to_run {
                                     self.command_to_run = Some((cmd, args, in_term));
+                                } else {
+                                    self.exit_requested = true;
                                 }
                             }
                             ExecutionResult::HideAndRun(cmd, args, in_term) => {
-                                self.exit_requested = true;
                                 self.command_to_run = Some((cmd, args, in_term));
                             }
                             ExecutionResult::Success => {
@@ -743,6 +754,7 @@ impl App {
                     self.settings_input_mode,
                     &self.settings_input_buffer,
                     self.file_manager_open,
+                    self.main_focus_pane,
                 );
             })?;
 
@@ -764,6 +776,49 @@ impl App {
                     if time.elapsed() > Duration::from_secs(3) {
                         self.status_msg = None;
                     }
+                }
+            }
+
+            if self.command_to_run.is_some() {
+                if let Some((cmd, args, in_terminal)) = self.command_to_run.take() {
+                    let full_cmd = if args.is_empty() {
+                        cmd.clone()
+                    } else {
+                        format!("{} {}", cmd, args.join(" "))
+                    };
+
+                    if in_terminal {
+                        // Temporarily suspend terminal raw mode and alternate screen
+                        disable_raw_mode()?;
+                        crossterm::execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+                        terminal.show_cursor()?;
+
+                        // Run command
+                        let mut child = Command::new(&self.config.general.shell)
+                            .arg("-c")
+                            .arg(&full_cmd)
+                            .spawn()?;
+                        let _ = child.wait()?;
+
+                        // Prompt user to press Enter before returning to Rune
+                        println!("\n[Rune: Process exited. Press Enter to return to Rune]");
+                        let mut buf = String::new();
+                        let _ = io::stdin().read_line(&mut buf);
+
+                        // Restore terminal raw mode and alternate screen
+                        enable_raw_mode()?;
+                        crossterm::execute!(terminal.backend_mut(), EnterAlternateScreen)?;
+                        terminal.clear()?;
+                    } else {
+                        // Run background detached command
+                        let _ = Command::new(&self.config.general.shell)
+                            .arg("-c")
+                            .arg(format!("{} &", full_cmd))
+                            .spawn();
+                        let msg = format!("Launched: {}", full_cmd);
+                        self.status_msg = Some((msg, Instant::now()));
+                    }
+                    self.update_search();
                 }
             }
         }

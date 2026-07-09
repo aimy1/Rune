@@ -23,8 +23,8 @@
  
  ---
  <img width="2323" height="1386" alt="屏幕截图_20260709_104146" src="https://github.com/user-attachments/assets/efefd1ee-4bc2-4183-9958-5315502e9fd5" />
-<img width="2296" height="1353" alt="屏幕截图_20260709_104210" src="https://github.com/user-attachments/assets/4fe414e6-a15a-4693-be64-a9f4a18488ca" />
-
+ <img width="2296" height="1353" alt="屏幕截图_20260709_104210" src="https://github.com/user-attachments/assets/4fe414e6-a15a-4693-be64-a9f4a18488ca" />
+ 
  ## 📖 Overview
  
  Rune is a modern, lightweight, keyboard-driven **TUI launcher** for Linux. It serves as a central command entry point — launch apps, browse files, run shell commands, query AI, manage services, and browse clipboard history, all without leaving your terminal.
@@ -35,16 +35,15 @@
  
  | Feature | Description |
  | :---: | :--- |
- | 🖥️ | **App Launcher** — Index & search `.desktop` files; launch GUI apps in detached sessions |
- | 📁 | **Responsive File Manager** — Dolphin-inspired dual-pane browser with responsive columns, cut indicators, and file management |
+ | 🖥️ | **App Launcher** — Index & search `.desktop` files; launch GUI apps detached, or suspend Alternate Screen for terminal commands/editors (like `nvim`) |
+ | 📁 | **Responsive File Manager** — Dolphin-inspired TUI browser with dual-pane layout, sidebar navigation, address bar, and local filters |
  | 🖼️ | **Image Preview** — Renders icons & images via half-block characters (`▄`/`▀`) with true RGB colors |
- | 🐚 | **Shell Executor** — Run commands silently in background or interactively in a new terminal |
+ | ⏱️ | **Recent History** — Fully functional **Recent Files** and **Recent Locations** trackers as searchable virtual directories |
+ | 📋 | **Interactive Overlays** — Floating Context Menu (`m`/`M`), secure pre-populated Input Dialogs for renames/creations, and red warning Delete Confirmation dialogs |
  | 🧮 | **Calculator & Unit Converter** — Evaluate expressions; convert mass, temperature, length (4 decimal places) |
  | 🔑 | **SSH Launcher** — Parse `~/.ssh/config` and launch SSH sessions instantly |
- | 📋 | **Clipboard Manager** — Systemd-based daemon captures clipboard history; restore entries from a searchable list |
  | 🐳 | **Docker & Systemd** — Inspect containers (with log preview) and system services; start/restart with a keystroke |
  | 🤖 | **AI Chatbot** — Real-time LLM chat; supports OpenAI, Gemini API, and local Ollama |
- | 🔌 | **Script Plugins** — Drop any executable (Python, Bash, Node, Go) into the plugins dir to extend Rune |
  
  ---
  
@@ -60,14 +59,15 @@
  ### ⌨️ Keyboard Actions (Global inside File Manager)
  | Key | Action |
  | :--- | :--- |
- | `Tab` / `Shift-Tab` | Cycle focus between panes |
- | `←` / `→` | Switch focus between Favorites Sidebar and Files List |
- | `Backspace` | Navigate to parent directory (Exited folder auto-highlights in the list) |
+ | `Tab` / `Shift-Tab` | Cycle focus between panes (Sidebar ➔ Files ➔ Path ➔ Search) |
+ | `Backspace` | Navigate to parent directory (or exit virtual history views) |
+ | `m` / `M` | Open/close floating Context Menu Overlay |
  | `Alt-c` / `Alt-x` | Copy / Cut selected file (Cut files are displayed as dimmed) |
  | `Alt-v` | Paste file from clipboard (Conflicts auto-resolved with numerical suffixes) |
- | `Alt-d` / `Delete` | Delete selected file/folder |
- | `Alt-r` | Rename selected file/folder to current search query |
- | `Alt-n` / `Alt-f` | Create new folder / file with name from search query |
+ | `Alt-d` / `Delete` | Open secure Delete Confirmation dialog overlay |
+ | `Alt-r` | Rename file/folder (opens interactive pre-populated Input Dialog overlay) |
+ | `Alt-n` / `Alt-f` | Create new folder / file (opens interactive Input Dialog overlay) |
+ | `Alt-h` | Toggle showing hidden files starting with `.` |
  | `F4` / `Alt-t` | Launch user shell inside current directory |
  | `Alt-o` | Open current directory in graphical system file manager |
  
@@ -122,13 +122,14 @@
  
  ---
  
- ## ⌨️ Keybindings
+ ## ⌨️ Keybindings (Main Launcher Window)
  
  | Key | Action |
  | :--- | :--- |
  | `Char` / `Backspace` | Type / edit search query |
  | `↑` / `↓` &nbsp;·&nbsp; `Ctrl-p/n` &nbsp;·&nbsp; `Ctrl-k/j` | Navigate result list |
- | `Tab` / `Shift-Tab` | Switch active plugin tab |
+ | `Tab` / `Shift-Tab` | Switch focus between search box and results list |
+ | `Left` / `Right` | Switch active plugin category tab |
  | `Shift-↑` / `Shift-↓` &nbsp;·&nbsp; `Alt-j/k` &nbsp;·&nbsp; `PgUp/PgDn` | Scroll preview pane |
  | `Enter` | Execute primary action |
  | `F1` | Open / close Settings dashboard |

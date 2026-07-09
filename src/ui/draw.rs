@@ -113,6 +113,26 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
         .split(popup_layout[1])[1]
 }
 
+fn fixed_centered_rect(width: u16, height: u16, r: Rect) -> Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(r.height.saturating_sub(height) / 2),
+            Constraint::Length(height),
+            Constraint::Min(0),
+        ])
+        .split(r);
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Length(r.width.saturating_sub(width) / 2),
+            Constraint::Length(width),
+            Constraint::Min(0),
+        ])
+        .split(popup_layout[1])[1]
+}
+
 fn parse_markdown_line(line: &str, theme: &ThemeStyles) -> Line<'static> {
     let trimmed = line.trim();
     if trimmed.starts_with("# ") {
@@ -567,6 +587,7 @@ pub fn draw_app(
     settings_input_mode: bool,
     settings_input_buffer: &str,
     file_manager_open: bool,
+    main_focus_pane: usize,
 ) {
     let size = frame.size();
 
@@ -749,19 +770,7 @@ pub fn draw_app(
         let sidebar_area = main_columns[0];
         let files_area = main_columns[1];
 
-        // Split Sidebar vertically into Favorites, Preview, and Storage
-        let sidebar_rows = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(8), // Favorites List
-                Constraint::Min(5),    // Selected item preview metadata
-                Constraint::Length(3), // Disk Storage Capacity
-            ])
-            .split(sidebar_area);
-
-        let fav_area = sidebar_rows[0];
-        let prev_area = sidebar_rows[1];
-        let disk_area = sidebar_rows[2];
+        let fav_area = sidebar_area;
 
         let first_res = results.iter().find(|r| r.plugin_id == "file_manager");
         let sidebar_focused = first_res
@@ -771,22 +780,64 @@ pub fn draw_app(
             .and_then(|r| r.metadata.get("sidebar_selected_idx").and_then(|s| s.parse::<usize>().ok()))
             .unwrap_or(0);
 
-        // --- Render Favorites ---
+        // --- Render Favorites & Custom Groups ---
         let home_c = first_res.and_then(|r| r.metadata.get("fav_home_count").map(|s| s.as_str())).unwrap_or("0");
+        let desktop_c = first_res.and_then(|r| r.metadata.get("fav_desktop_count").map(|s| s.as_str())).unwrap_or("0");
         let docs_c = first_res.and_then(|r| r.metadata.get("fav_docs_count").map(|s| s.as_str())).unwrap_or("0");
-        let pics_c = first_res.and_then(|r| r.metadata.get("fav_pics_count").map(|s| s.as_str())).unwrap_or("0");
-        let music_c = first_res.and_then(|r| r.metadata.get("fav_music_count").map(|s| s.as_str())).unwrap_or("0");
         let downloads_c = first_res.and_then(|r| r.metadata.get("fav_downloads_count").map(|s| s.as_str())).unwrap_or("0");
+        let music_c = first_res.and_then(|r| r.metadata.get("fav_music_count").map(|s| s.as_str())).unwrap_or("0");
+        let pics_c = first_res.and_then(|r| r.metadata.get("fav_pics_count").map(|s| s.as_str())).unwrap_or("0");
+        let videos_c = first_res.and_then(|r| r.metadata.get("fav_videos_count").map(|s| s.as_str())).unwrap_or("0");
+        let trash_c = first_res.and_then(|r| r.metadata.get("fav_trash_count").map(|s| s.as_str())).unwrap_or("0");
 
-        let fav_items = vec![
-            (format!("🏠 Home ({})", home_c), 0),
-            (format!("📄 Documents ({})", docs_c), 1),
-            (format!("📷 Pictures ({})", pics_c), 2),
-            (format!("🎵 Music ({})", music_c), 3),
-            (format!("📦 Downloads ({})", downloads_c), 4),
-        ];
+        let fav_items = if is_zh {
+            vec![
+                (format!("🏠 主文件夹 ({})", home_c), 0),
+                (format!("🖥️ 桌面 ({})", desktop_c), 1),
+                (format!("📄 文档 ({})", docs_c), 2),
+                (format!("📥 下载 ({})", downloads_c), 3),
+                (format!("🎵 音乐 ({})", music_c), 4),
+                (format!("📷 图片 ({})", pics_c), 5),
+                (format!("🎥 视频 ({})", videos_c), 6),
+                (format!("🗑️ 回收站 ({})", trash_c), 7),
+            ]
+        } else {
+            vec![
+                (format!("🏠 Home ({})", home_c), 0),
+                (format!("🖥️ Desktop ({})", desktop_c), 1),
+                (format!("📄 Documents ({})", docs_c), 2),
+                (format!("📥 Downloads ({})", downloads_c), 3),
+                (format!("🎵 Music ({})", music_c), 4),
+                (format!("📷 Pictures ({})", pics_c), 5),
+                (format!("🎥 Videos ({})", videos_c), 6),
+                (format!("🗑️ Trash ({})", trash_c), 7),
+            ]
+        };
 
-        let fav_title = if is_zh { " 收藏夹 " } else { " Favorites " };
+        let mut visual_items = Vec::new();
+
+        // 1. Places Header
+        visual_items.push((if is_zh { "常用位置".to_string() } else { "Places".to_string() }, false, None));
+        for (label, idx) in fav_items {
+            visual_items.push((label, true, Some(idx)));
+        }
+
+        // 2. Recently Used Header
+        visual_items.push((if is_zh { "最近使用".to_string() } else { "Recently Used".to_string() }, false, None));
+        visual_items.push((if is_zh { "⏱️ 最近文件".to_string() } else { "⏱️ Recent Files".to_string() }, true, Some(8)));
+        visual_items.push((if is_zh { "📂 最近位置".to_string() } else { "📂 Recent Locations".to_string() }, true, Some(9)));
+
+        // 3. Storage Devices Header
+        visual_items.push((if is_zh { "存储设备".to_string() } else { "Storage Devices".to_string() }, false, None));
+        let drives_count = first_res.and_then(|r| r.metadata.get("fav_drives_count").and_then(|s| s.parse::<usize>().ok())).unwrap_or(0);
+        for d in 0..drives_count {
+            let name = first_res.and_then(|r| r.metadata.get(&format!("fav_drive_{}_name", d))).cloned().unwrap_or_default();
+            let kind = first_res.and_then(|r| r.metadata.get(&format!("fav_drive_{}_kind", d))).map(|s| s.as_str()).unwrap_or("drive_root");
+            let icon = if kind == "drive_root" { "💽 " } else { "💾 " };
+            visual_items.push((format!("{}{}", icon, name), true, Some(10 + d)));
+        }
+
+        let fav_title = if is_zh { " 导航栏 " } else { " Navigation " };
         let fav_block = Block::default()
             .borders(Borders::ALL)
             .border_style(if sidebar_focused {
@@ -801,21 +852,28 @@ pub fn draw_app(
             })
             .title(fav_title);
 
-        let list_items: Vec<ListItem> = fav_items
+        let list_items: Vec<ListItem> = visual_items
             .iter()
-            .map(|(label, idx)| {
-                let is_selected = *idx == sidebar_selected_idx;
-                let style = if is_selected {
-                    if sidebar_focused {
-                        Style::default().bg(theme.selection).fg(theme.accent).add_modifier(Modifier::BOLD)
-                    } else {
-                        Style::default().bg(theme.selection).fg(theme.foreground)
-                    }
+            .map(|(label, is_selectable, opt_idx)| {
+                if !is_selectable {
+                    ListItem::new(Line::from(vec![
+                        Span::styled(format!(" {}", label), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
+                    ]))
                 } else {
-                    Style::default().fg(theme.foreground)
-                };
-                let prefix = if is_selected { "▶ " } else { "  " };
-                ListItem::new(Line::from(Span::styled(format!("{prefix}{label}"), style)))
+                    let idx = opt_idx.unwrap();
+                    let is_selected = idx == sidebar_selected_idx;
+                    let style = if is_selected {
+                        if sidebar_focused {
+                            Style::default().bg(theme.selection).fg(theme.accent).add_modifier(Modifier::BOLD)
+                        } else {
+                            Style::default().bg(theme.selection).fg(theme.foreground)
+                        }
+                    } else {
+                        Style::default().fg(theme.foreground)
+                    };
+                    let prefix = if is_selected { "▶ " } else { "  " };
+                    ListItem::new(Line::from(Span::styled(format!("{prefix}{label}"), style)))
+                }
             })
             .collect();
 
@@ -823,120 +881,6 @@ pub fn draw_app(
             .block(fav_block)
             .style(Style::default().bg(theme.background));
         frame.render_widget(fav_list, fav_area);
-
-        // --- Render Preview (bottom-left) ---
-        let preview_title = if is_zh { " 预览面板 " } else { " Preview " };
-        let prev_block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(theme.border))
-            .title(preview_title);
-
-        let preview_lines = if let Some(ref text) = preview_content {
-            let mut lines = Vec::new();
-            let mut in_code_block = false;
-            for line in text.lines() {
-                let trimmed = line.trim();
-                if line.starts_with("[IMAGE: ") && line.ends_with(']') {
-                    let path_str = &line[8..line.len() - 1];
-                    lines.extend(draw_image_in_preview(path_str, theme, 20, 10));
-                    continue;
-                }
-                if trimmed.starts_with("```") {
-                    in_code_block = !in_code_block;
-                    continue;
-                }
-                if trimmed.starts_with("---") {
-                    break;
-                }
-                if in_code_block {
-                    lines.push(Line::from(Span::styled(line.to_string(), Style::default().fg(theme.success))));
-                } else if trimmed.starts_with('|') {
-                    if trimmed.contains("---") {
-                        continue;
-                    }
-                    let parts: Vec<&str> = trimmed.split('|').collect();
-                    if parts.len() >= 4 {
-                        let raw_key = parts[1].trim();
-                        let raw_val = parts[2].trim();
-                        if raw_key == "Metadata" || raw_key.is_empty() {
-                            continue;
-                        }
-                        let key = raw_key.replace("**", "").replace("`", "");
-                        let val = raw_val.replace("**", "").replace("`", "");
-                        
-                        let display_key = if is_zh {
-                            match key.as_str() {
-                                "Type" => "类型".to_string(),
-                                "Size" => "大小".to_string(),
-                                "Permissions" => "权限".to_string(),
-                                "Owner" => "所有者".to_string(),
-                                "Modified" => "修改时间".to_string(),
-                                _ => key,
-                            }
-                        } else {
-                            key
-                        };
-
-                        lines.push(Line::from(vec![
-                            Span::styled(format!(" {:<10}: ", display_key), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
-                            Span::styled(val, Style::default().fg(theme.foreground)),
-                        ]));
-                    }
-                } else if trimmed.starts_with("# ") {
-                    lines.push(Line::from(Span::styled(
-                        format!(" {}", trimmed[2..].to_string()),
-                        Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)
-                    )));
-                } else if trimmed.starts_with("*Path:") {
-                    let path_val = trimmed.trim_start_matches("*Path:").trim_end_matches('*').trim();
-                    lines.push(Line::from(vec![
-                        Span::styled(" Path: ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
-                        Span::styled(path_val.to_string(), Style::default().fg(theme.border)),
-                    ]));
-                    lines.push(Line::from(""));
-                } else {
-                    lines.push(parse_markdown_line(line, theme));
-                }
-            }
-            lines
-        } else {
-            vec![Line::from(Span::styled(
-                if is_zh { " (无选中文件) " } else { " (No selection) " },
-                Style::default().fg(theme.border)
-            ))]
-        };
-
-        let preview_p = Paragraph::new(preview_lines)
-            .block(prev_block)
-            .style(Style::default().bg(theme.background))
-            .wrap(ratatui::widgets::Wrap { trim: true });
-        frame.render_widget(preview_p, prev_area);
-
-        // --- Render Storage Capacity Bar ---
-        let disk_total = first_res.and_then(|r| r.metadata.get("disk_total").map(|s| s.as_str())).unwrap_or("-");
-        let disk_used = first_res.and_then(|r| r.metadata.get("disk_used").map(|s| s.as_str())).unwrap_or("-");
-        let disk_percent = first_res.and_then(|r| r.metadata.get("disk_percent").map(|s| s.as_str())).unwrap_or("-%");
-
-        let pct_val = disk_percent.trim_end_matches('%').parse::<u8>().unwrap_or(0);
-        let bar_width = 10;
-        let filled = ((pct_val as f32 / 100.0) * bar_width as f32).round() as usize;
-        let bar_str = format!(
-            " [{}{}] {} ",
-            "█".repeat(filled),
-            "░".repeat(bar_width - filled),
-            disk_percent
-        );
-        let disk_detail = format!(" {} / {}", disk_used, disk_total);
-
-        let disk_block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(theme.border))
-            .title(if is_zh { " 💾 存储空间 " } else { " 💾 Storage " });
-        let disk_p = Paragraph::new(vec![
-            Line::from(Span::styled(bar_str, Style::default().fg(if pct_val > 85 { theme.error } else { theme.accent }).add_modifier(Modifier::BOLD))),
-            Line::from(Span::styled(disk_detail, Style::default().fg(theme.border).add_modifier(Modifier::DIM))),
-        ]).block(disk_block);
-        frame.render_widget(disk_p, disk_area);
 
         // --- Render Right Column (Breadcrumbs & Files List) ---
         let files_rows = Layout::default()
@@ -1132,9 +1076,9 @@ pub fn draw_app(
         };
 
         let cheatsheet_text = if is_zh {
-            " ⌨️ F2:关闭 | ←/→:切换焦点 | Alt-N:建文件夹 | Alt-F:建文件 | Alt-R:重命名 | Delete:删除 | F4:打开终端 "
+            " ⌨️ F2:关闭 | m:操作菜单 | Alt-H:显示隐藏 | ←/→:焦点 | Alt-N:建文件夹 | Alt-F:建文件 | Del:删除 | F4:终端 "
         } else {
-            " ⌨️ F2:Close | ←/→:Focus | Alt-N:Dir | Alt-F:File | Alt-R:Rename | Del:Delete | F4:Terminal "
+            " ⌨️ F2:Close | m:Menu | Alt-H:Hidden | ←/→:Focus | Alt-N:Dir | Alt-F:File | Del:Delete | F4:Terminal "
         };
 
         let footer_p = Paragraph::new(Line::from(vec![
@@ -1144,6 +1088,238 @@ pub fn draw_app(
         ]))
         .style(Style::default().bg(theme.background));
         frame.render_widget(footer_p, footer_area);
+
+        // Draw Context Menu Popup if open
+        let context_menu_open = first_res
+            .and_then(|r| r.metadata.get("context_menu_open").map(|s| s == "true"))
+            .unwrap_or(false);
+        if context_menu_open {
+            let context_menu_selected_idx = first_res
+                .and_then(|r| r.metadata.get("context_menu_selected_idx").and_then(|s| s.parse::<usize>().ok()))
+                .unwrap_or(0);
+
+            let menu_options = vec![
+                if is_zh { "▶ 打开 (Enter)" } else { "▶ Open (Enter)" },
+                if is_zh { "📋 复制 (Copy)" } else { "📋 Copy" },
+                if is_zh { "✂️ 剪切 (Cut)" } else { "✂️ Cut" },
+                if is_zh { "📥 粘贴 (Paste)" } else { "📥 Paste" },
+                if is_zh { "✏️ 重命名 (Rename)" } else { "✏️ Rename" },
+                if is_zh { "🗑️ 删除 (Delete)" } else { "🗑️ Delete" },
+                if is_zh { "📄 新建文件 (New File)" } else { "📄 New File" },
+                if is_zh { "📁 新建文件夹 (New Dir)" } else { "📁 New Folder" },
+                if is_zh { "ℹ️ 属性 (Properties)" } else { "ℹ️ Properties" },
+                if is_zh { "❌ 取消 (Cancel)" } else { "❌ Cancel" },
+            ];
+
+            let menu_title = if is_zh { " 操作菜单 " } else { " Context Menu " };
+            let menu_block = Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))
+                .title(menu_title);
+
+            let opt_items: Vec<ListItem> = menu_options
+                .iter()
+                .enumerate()
+                .map(|(idx, opt)| {
+                    let is_hovered = idx == context_menu_selected_idx;
+                    let style = if is_hovered {
+                        Style::default().bg(theme.selection).fg(theme.accent).add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(theme.foreground)
+                    };
+                    ListItem::new(Line::from(Span::styled(*opt, style)))
+                })
+                .collect();
+            let opt_list = List::new(opt_items).block(menu_block).style(Style::default().bg(theme.background));
+            
+            let popup_area = fixed_centered_rect(32, 12, area);
+            frame.render_widget(Clear, popup_area); // clear underneath
+            frame.render_widget(opt_list, popup_area);
+        }
+
+        // Draw Input Dialog Popup if open
+        let input_dialog_open = first_res
+            .and_then(|r| r.metadata.get("input_dialog_open").map(|s| s == "true"))
+            .unwrap_or(false);
+        if input_dialog_open {
+            let input_title = first_res
+                .and_then(|r| r.metadata.get("input_dialog_title").cloned())
+                .unwrap_or_else(|| "Input".to_string());
+            let input_buf = first_res
+                .and_then(|r| r.metadata.get("input_dialog_buffer").cloned())
+                .unwrap_or_default();
+
+            let popup_block = Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))
+                .title(format!(" {} ", input_title));
+
+            let input_p = Paragraph::new(Line::from(vec![
+                Span::raw(" > "),
+                Span::styled(input_buf.clone(), Style::default().fg(theme.foreground)),
+            ]))
+            .block(popup_block)
+            .style(Style::default().bg(theme.background));
+
+            let popup_area = fixed_centered_rect(50, 3, area);
+            frame.render_widget(Clear, popup_area); // clear underneath
+            frame.render_widget(input_p, popup_area);
+
+            // Set terminal cursor dynamically at end of input buffer
+            let cursor_x = popup_area.x + 3 + input_buf.chars().count() as u16;
+            let cursor_y = popup_area.y + 1;
+            frame.set_cursor(cursor_x, cursor_y);
+        }
+
+        // Draw Properties Dialog if open
+        let properties_dialog_open = first_res
+            .and_then(|r| r.metadata.get("properties_dialog_open").map(|s| s == "true"))
+            .unwrap_or(false);
+        if properties_dialog_open {
+            let item_id = first_res
+                .and_then(|r| r.metadata.get("properties_dialog_item_id").cloned())
+                .unwrap_or_default();
+            let path = std::path::Path::new(&item_id);
+            
+            let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            let is_dir = path.is_dir();
+            let type_desc = crate::plugins::file_manager::get_file_type_desc(path, is_dir);
+            
+            let size_str = if is_dir {
+                results.iter()
+                    .find(|r| r.id == item_id)
+                    .and_then(|r| r.metadata.get("size").cloned())
+                    .unwrap_or_else(|| "unknown".to_string())
+            } else {
+                std::fs::metadata(path)
+                    .map(|m| {
+                        let size = m.len();
+                        if size < 1024 {
+                            format!("{} B", size)
+                        } else if size < 1024 * 1024 {
+                            format!("{:.1} KB", size as f64 / 1024.0)
+                        } else {
+                            format!("{:.1} MB", size as f64 / (1024.0 * 1024.0))
+                        }
+                    })
+                    .unwrap_or_else(|_| "unknown".to_string())
+            };
+
+            let permissions = crate::plugins::file_manager::get_permissions_str(path);
+            let owner = crate::plugins::file_manager::get_owner_str(path);
+
+            let properties_title = if is_zh { " 属性信息 " } else { " Properties " };
+            let popup_block = Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))
+                .title(properties_title);
+
+            let info_lines = vec![
+                Line::from(vec![
+                    Span::styled(format!("  {:<12}", if is_zh { "名称:" } else { "Name:" }), Style::default().fg(theme.border)),
+                    Span::styled(name, Style::default().fg(theme.foreground).add_modifier(Modifier::BOLD)),
+                ]),
+                Line::from(vec![
+                    Span::styled(format!("  {:<12}", if is_zh { "类型:" } else { "Type:" }), Style::default().fg(theme.border)),
+                    Span::styled(type_desc, Style::default().fg(theme.foreground)),
+                ]),
+                Line::from(vec![
+                    Span::styled(format!("  {:<12}", if is_zh { "大小:" } else { "Size:" }), Style::default().fg(theme.border)),
+                    Span::styled(size_str, Style::default().fg(theme.foreground)),
+                ]),
+                Line::from(vec![
+                    Span::styled(format!("  {:<12}", if is_zh { "路径:" } else { "Path:" }), Style::default().fg(theme.border)),
+                    Span::styled(item_id, Style::default().fg(theme.foreground).add_modifier(Modifier::DIM)),
+                ]),
+                Line::from(vec![
+                    Span::styled(format!("  {:<12}", if is_zh { "权限:" } else { "Perms:" }), Style::default().fg(theme.border)),
+                    Span::styled(permissions, Style::default().fg(theme.success)),
+                ]),
+                Line::from(vec![
+                    Span::styled(format!("  {:<12}", if is_zh { "所有者:" } else { "Owner:" }), Style::default().fg(theme.border)),
+                    Span::styled(owner, Style::default().fg(theme.foreground)),
+                ]),
+                Line::from(vec![]),
+                Line::from(vec![
+                    Span::styled(if is_zh { "  按任意键关闭..." } else { "  Press any key to close..." }, Style::default().fg(theme.border).add_modifier(Modifier::DIM)),
+                ]),
+            ];
+
+            let info_p = Paragraph::new(info_lines)
+                .block(popup_block)
+                .style(Style::default().bg(theme.background));
+
+            let popup_area = fixed_centered_rect(60, 10, area);
+            frame.render_widget(Clear, popup_area); // clear underneath
+            frame.render_widget(info_p, popup_area);
+        }
+
+        // Draw Delete Confirmation Dialog if open
+        let delete_confirm_open = first_res
+            .and_then(|r| r.metadata.get("delete_confirm_open").map(|s| s == "true"))
+            .unwrap_or(false);
+        if delete_confirm_open {
+            let item_id = first_res
+                .and_then(|r| r.metadata.get("delete_confirm_item_id").cloned())
+                .unwrap_or_default();
+            let delete_confirm_selected_idx = first_res
+                .and_then(|r| r.metadata.get("delete_confirm_selected_idx").and_then(|s| s.parse::<usize>().ok()))
+                .unwrap_or(0);
+
+            let filename = std::path::Path::new(&item_id)
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
+
+            let confirm_title = if is_zh { " 确认删除 " } else { " Confirm Delete " };
+            let popup_block = Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(theme.error).add_modifier(Modifier::BOLD))
+                .title(confirm_title);
+
+            let question = if is_zh {
+                format!("您确定要永久删除 '{}' 吗？", filename)
+            } else {
+                format!("Are you sure you want to permanently delete '{}'?", filename)
+            };
+
+            let btn_no_style = if delete_confirm_selected_idx == 0 {
+                Style::default().bg(theme.selection).fg(theme.accent).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(theme.foreground)
+            };
+
+            let btn_yes_style = if delete_confirm_selected_idx == 1 {
+                Style::default().bg(theme.selection).fg(theme.error).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(theme.foreground)
+            };
+
+            let btn_no = if is_zh { "[ 否 (N) ]" } else { "[ No (N) ]" };
+            let btn_yes = if is_zh { "[ 是 (Y) ]" } else { "[ Yes (Y) ]" };
+
+            let confirm_lines = vec![
+                Line::from(vec![]),
+                Line::from(vec![
+                    Span::styled(format!("  {}", question), Style::default().fg(theme.foreground).add_modifier(Modifier::BOLD)),
+                ]),
+                Line::from(vec![]),
+                Line::from(vec![
+                    Span::raw("      "),
+                    Span::styled(btn_no, btn_no_style),
+                    Span::raw("          "),
+                    Span::styled(btn_yes, btn_yes_style),
+                ]),
+            ];
+
+            let confirm_p = Paragraph::new(confirm_lines)
+                .block(popup_block)
+                .style(Style::default().bg(theme.background));
+
+            let popup_area = fixed_centered_rect(55, 6, area);
+            frame.render_widget(Clear, popup_area); // clear underneath
+            frame.render_widget(confirm_p, popup_area);
+        }
 
         return;
     }
@@ -1179,10 +1355,16 @@ pub fn draw_app(
 
     // 1. Render Search Box
     let search_title = if is_zh { " 搜索输入 " } else { " Search Query " };
+    let is_search_focused = main_focus_pane == 0;
     let search_block = Block::default()
-        .title(Span::styled(search_title, Style::default().fg(theme.border)))
+        .title(Span::styled(search_title, Style::default().fg(if is_search_focused { theme.accent } else { theme.border })))
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(theme.border));
+        .border_style(Style::default().fg(if is_search_focused { theme.accent } else { theme.border }))
+        .border_type(if is_search_focused {
+            ratatui::widgets::BorderType::Double
+        } else {
+            ratatui::widgets::BorderType::Plain
+        });
 
     // Show text cursor at end of query
     let cursor_span = Span::raw(query);
@@ -1195,11 +1377,13 @@ pub fn draw_app(
 
     frame.render_widget(search_p, chunks[0]);
 
-    // Place terminal cursor in the search input box (offset: 1 border + 3 for "🔍 " emoji)
-    let cursor_x = (chunks[0].x + 4 + query.chars().count() as u16)
-        .min(chunks[0].x + chunks[0].width.saturating_sub(2));
-    let cursor_y = chunks[0].y + 1;
-    frame.set_cursor(cursor_x, cursor_y);
+    if is_search_focused {
+        // Place terminal cursor in the search input box (offset: 1 border + 3 for "🔍 " emoji)
+        let cursor_x = (chunks[0].x + 4 + query.chars().count() as u16)
+            .min(chunks[0].x + chunks[0].width.saturating_sub(2));
+        let cursor_y = chunks[0].y + 1;
+        frame.set_cursor(cursor_x, cursor_y);
+    }
 
     // 2. Render Results and Preview
     let middle_area = chunks[1];
@@ -1217,6 +1401,7 @@ pub fn draw_app(
 
     let selected_idx = list_state.selected().unwrap_or(0);
     let is_file_manager = false;
+    let focus_pane = 1;
 
     if is_file_manager {
         let outer_block = Block::default()
@@ -1274,19 +1459,7 @@ pub fn draw_app(
         let sidebar_area = main_columns[0];
         let files_area = main_columns[1];
 
-        // Split Sidebar vertically into Favorites, Preview, and Storage
-        let sidebar_rows = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(8), // Favorites List
-                Constraint::Min(5),    // Selected item preview metadata
-                Constraint::Length(3), // Disk Storage Capacity
-            ])
-            .split(sidebar_area);
-
-        let fav_area = sidebar_rows[0];
-        let prev_area = sidebar_rows[1];
-        let disk_area = sidebar_rows[2];
+        let fav_area = sidebar_area;
 
         let first_res = results.iter().find(|r| r.plugin_id == "file_manager");
         let sidebar_focused = first_res
@@ -1296,22 +1469,64 @@ pub fn draw_app(
             .and_then(|r| r.metadata.get("sidebar_selected_idx").and_then(|s| s.parse::<usize>().ok()))
             .unwrap_or(0);
 
-        // --- Render Favorites ---
+        // --- Render Favorites & Custom Groups ---
         let home_c = first_res.and_then(|r| r.metadata.get("fav_home_count").map(|s| s.as_str())).unwrap_or("0");
+        let desktop_c = first_res.and_then(|r| r.metadata.get("fav_desktop_count").map(|s| s.as_str())).unwrap_or("0");
         let docs_c = first_res.and_then(|r| r.metadata.get("fav_docs_count").map(|s| s.as_str())).unwrap_or("0");
-        let pics_c = first_res.and_then(|r| r.metadata.get("fav_pics_count").map(|s| s.as_str())).unwrap_or("0");
-        let music_c = first_res.and_then(|r| r.metadata.get("fav_music_count").map(|s| s.as_str())).unwrap_or("0");
         let downloads_c = first_res.and_then(|r| r.metadata.get("fav_downloads_count").map(|s| s.as_str())).unwrap_or("0");
+        let music_c = first_res.and_then(|r| r.metadata.get("fav_music_count").map(|s| s.as_str())).unwrap_or("0");
+        let pics_c = first_res.and_then(|r| r.metadata.get("fav_pics_count").map(|s| s.as_str())).unwrap_or("0");
+        let videos_c = first_res.and_then(|r| r.metadata.get("fav_videos_count").map(|s| s.as_str())).unwrap_or("0");
+        let trash_c = first_res.and_then(|r| r.metadata.get("fav_trash_count").map(|s| s.as_str())).unwrap_or("0");
 
-        let fav_items = vec![
-            (format!("🏠 Home ({})", home_c), 0),
-            (format!("📄 Documents ({})", docs_c), 1),
-            (format!("📷 Pictures ({})", pics_c), 2),
-            (format!("🎵 Music ({})", music_c), 3),
-            (format!("📦 Downloads ({})", downloads_c), 4),
-        ];
+        let fav_items = if is_zh {
+            vec![
+                (format!("🏠 主文件夹 ({})", home_c), 0),
+                (format!("🖥️ 桌面 ({})", desktop_c), 1),
+                (format!("📄 文档 ({})", docs_c), 2),
+                (format!("📥 下载 ({})", downloads_c), 3),
+                (format!("🎵 音乐 ({})", music_c), 4),
+                (format!("📷 图片 ({})", pics_c), 5),
+                (format!("🎥 视频 ({})", videos_c), 6),
+                (format!("🗑️ 回收站 ({})", trash_c), 7),
+            ]
+        } else {
+            vec![
+                (format!("🏠 Home ({})", home_c), 0),
+                (format!("🖥️ Desktop ({})", desktop_c), 1),
+                (format!("📄 Documents ({})", docs_c), 2),
+                (format!("📥 Downloads ({})", downloads_c), 3),
+                (format!("🎵 Music ({})", music_c), 4),
+                (format!("📷 Pictures ({})", pics_c), 5),
+                (format!("🎥 Videos ({})", videos_c), 6),
+                (format!("🗑️ Trash ({})", trash_c), 7),
+            ]
+        };
 
-        let fav_title = if is_zh { " 收藏夹 " } else { " Favorites " };
+        let mut visual_items = Vec::new();
+
+        // 1. Places Header
+        visual_items.push((if is_zh { "常用位置".to_string() } else { "Places".to_string() }, false, None));
+        for (label, idx) in fav_items {
+            visual_items.push((label, true, Some(idx)));
+        }
+
+        // 2. Recently Used Header
+        visual_items.push((if is_zh { "最近使用".to_string() } else { "Recently Used".to_string() }, false, None));
+        visual_items.push((if is_zh { "⏱️ 最近文件".to_string() } else { "⏱️ Recent Files".to_string() }, true, Some(8)));
+        visual_items.push((if is_zh { "📂 最近位置".to_string() } else { "📂 Recent Locations".to_string() }, true, Some(9)));
+
+        // 3. Storage Devices Header
+        visual_items.push((if is_zh { "存储设备".to_string() } else { "Storage Devices".to_string() }, false, None));
+        let drives_count = first_res.and_then(|r| r.metadata.get("fav_drives_count").and_then(|s| s.parse::<usize>().ok())).unwrap_or(0);
+        for d in 0..drives_count {
+            let name = first_res.and_then(|r| r.metadata.get(&format!("fav_drive_{}_name", d))).cloned().unwrap_or_default();
+            let kind = first_res.and_then(|r| r.metadata.get(&format!("fav_drive_{}_kind", d))).map(|s| s.as_str()).unwrap_or("drive_root");
+            let icon = if kind == "drive_root" { "💽 " } else { "💾 " };
+            visual_items.push((format!("{}{}", icon, name), true, Some(10 + d)));
+        }
+
+        let fav_title = if is_zh { " 导航栏 " } else { " Navigation " };
         let fav_block = Block::default()
             .borders(Borders::ALL)
             .border_style(if sidebar_focused {
@@ -1326,21 +1541,28 @@ pub fn draw_app(
             })
             .title(fav_title);
 
-        let list_items: Vec<ListItem> = fav_items
+        let list_items: Vec<ListItem> = visual_items
             .iter()
-            .map(|(label, idx)| {
-                let is_selected = *idx == sidebar_selected_idx;
-                let style = if is_selected {
-                    if sidebar_focused {
-                        Style::default().bg(theme.selection).fg(theme.accent).add_modifier(Modifier::BOLD)
-                    } else {
-                        Style::default().bg(theme.selection).fg(theme.foreground)
-                    }
+            .map(|(label, is_selectable, opt_idx)| {
+                if !is_selectable {
+                    ListItem::new(Line::from(vec![
+                        Span::styled(format!(" {}", label), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
+                    ]))
                 } else {
-                    Style::default().fg(theme.foreground)
-                };
-                let prefix = if is_selected { "▶ " } else { "  " };
-                ListItem::new(Line::from(Span::styled(format!("{prefix}{label}"), style)))
+                    let idx = opt_idx.unwrap();
+                    let is_selected = idx == sidebar_selected_idx;
+                    let style = if is_selected {
+                        if sidebar_focused {
+                            Style::default().bg(theme.selection).fg(theme.accent).add_modifier(Modifier::BOLD)
+                        } else {
+                            Style::default().bg(theme.selection).fg(theme.foreground)
+                        }
+                    } else {
+                        Style::default().fg(theme.foreground)
+                    };
+                    let prefix = if is_selected { "▶ " } else { "  " };
+                    ListItem::new(Line::from(Span::styled(format!("{prefix}{label}"), style)))
+                }
             })
             .collect();
 
@@ -1348,109 +1570,6 @@ pub fn draw_app(
             .block(fav_block)
             .style(Style::default().bg(theme.background));
         frame.render_widget(fav_list, fav_area);
-
-        // --- Render Preview (bottom-left) ---
-        let preview_title = if is_zh { " 预览面板 " } else { " Preview " };
-        let prev_block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(theme.border))
-            .title(preview_title);
-
-        let preview_lines = if let Some(ref text) = preview_content {
-            let mut lines = Vec::new();
-            let mut in_code_block = false;
-            for line in text.lines() {
-                let trimmed = line.trim();
-                if trimmed.starts_with("```") {
-                    in_code_block = !in_code_block;
-                    continue;
-                }
-                if trimmed.starts_with("---") {
-                    break;
-                }
-                if in_code_block {
-                    lines.push(Line::from(Span::styled(line.to_string(), Style::default().fg(theme.success))));
-                } else if trimmed.starts_with('|') {
-                    if trimmed.contains("---") {
-                        continue;
-                    }
-                    let parts: Vec<&str> = trimmed.split('|').collect();
-                    if parts.len() >= 4 {
-                        let raw_key = parts[1].trim();
-                        let raw_val = parts[2].trim();
-                        if raw_key == "Metadata" || raw_key.is_empty() {
-                            continue;
-                        }
-                        let key = raw_key.replace("**", "").replace("`", "");
-                        let val = raw_val.replace("**", "").replace("`", "");
-                        
-                        let display_key = if is_zh {
-                            match key.as_str() {
-                                "Type" => "类型".to_string(),
-                                "Size" => "大小".to_string(),
-                                "Permissions" => "权限".to_string(),
-                                "Owner" => "所有者".to_string(),
-                                _ => key,
-                            }
-                        } else {
-                            key
-                        };
-
-                        lines.push(Line::from(vec![
-                            Span::styled(format!(" {:<5}: ", display_key), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
-                            Span::styled(val, Style::default().fg(theme.foreground)),
-                        ]));
-                    }
-                } else if trimmed.starts_with("# ") {
-                    lines.push(Line::from(Span::styled(
-                        format!(" {}", trimmed[2..].to_string()),
-                        Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)
-                    )));
-                } else if trimmed.starts_with("*Path:") {
-                    continue;
-                } else {
-                    lines.push(parse_markdown_line(line, theme));
-                }
-            }
-            lines
-        } else {
-            vec![Line::from(Span::styled(
-                if is_zh { " (无选中文件) " } else { " (No selection) " },
-                Style::default().fg(theme.border)
-            ))]
-        };
-
-        let preview_p = Paragraph::new(preview_lines)
-            .block(prev_block)
-            .style(Style::default().bg(theme.background))
-            .wrap(ratatui::widgets::Wrap { trim: true });
-        frame.render_widget(preview_p, prev_area);
-
-        // --- Render Storage Capacity Bar ---
-        let disk_total = first_res.and_then(|r| r.metadata.get("disk_total").map(|s| s.as_str())).unwrap_or("-");
-        let disk_used = first_res.and_then(|r| r.metadata.get("disk_used").map(|s| s.as_str())).unwrap_or("-");
-        let disk_percent = first_res.and_then(|r| r.metadata.get("disk_percent").map(|s| s.as_str())).unwrap_or("-%");
-
-        let pct_val = disk_percent.trim_end_matches('%').parse::<u8>().unwrap_or(0);
-        let bar_width = 10;
-        let filled = ((pct_val as f32 / 100.0) * bar_width as f32).round() as usize;
-        let bar_str = format!(
-            " [{}{}] {} ",
-            "█".repeat(filled),
-            "░".repeat(bar_width - filled),
-            disk_percent
-        );
-        let disk_detail = format!(" {} / {}", disk_used, disk_total);
-
-        let disk_block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(theme.border))
-            .title(if is_zh { " 💾 存储空间 " } else { " 💾 Storage " });
-        let disk_p = Paragraph::new(vec![
-            Line::from(Span::styled(bar_str, Style::default().fg(if pct_val > 85 { theme.error } else { theme.accent }).add_modifier(Modifier::BOLD))),
-            Line::from(Span::styled(disk_detail, Style::default().fg(theme.border).add_modifier(Modifier::DIM))),
-        ]).block(disk_block);
-        frame.render_widget(disk_p, disk_area);
 
         // --- Render Right Column (Breadcrumbs & Files List) ---
         let files_rows = Layout::default()
@@ -1541,7 +1660,8 @@ pub fn draw_app(
         frame.render_widget(header_p, header_area);
 
         // Files List (Redesigned as an aligned multi-column visual list)
-        let files_border_style = if !sidebar_focused {
+        let files_focused = focus_pane == 1;
+        let files_border_style = if files_focused {
             Style::default().fg(theme.accent)
         } else {
             Style::default().fg(theme.border)
@@ -1611,7 +1731,7 @@ pub fn draw_app(
         let files_block = Block::default()
             .borders(Borders::ALL)
             .border_style(files_border_style)
-            .border_type(if !sidebar_focused {
+            .border_type(if files_focused {
                 ratatui::widgets::BorderType::Double
             } else {
                 ratatui::widgets::BorderType::Plain
@@ -1653,9 +1773,9 @@ pub fn draw_app(
         };
 
         let cheatsheet_text = if is_zh {
-            " ⌨️ F2:关闭 | ←/→:切换焦点 | Alt-N:建文件夹 | Alt-F:建文件 | Alt-R:重命名 | Delete:删除 | F4:打开终端 "
+            " ⌨️ F2:关闭 | m:操作菜单 | Alt-H:显示隐藏 | ←/→:焦点 | Alt-N:建文件夹 | Alt-F:建文件 | Del:删除 | F4:终端 "
         } else {
-            " ⌨️ F2:Close | ←/→:Focus | Alt-N:Dir | Alt-F:File | Alt-R:Rename | Del:Delete | F4:Terminal "
+            " ⌨️ F2:Close | m:Menu | Alt-H:Hidden | ←/→:Focus | Alt-N:Dir | Alt-F:File | Del:Delete | F4:Terminal "
         };
 
         let footer_p = Paragraph::new(Line::from(vec![
@@ -1665,6 +1785,54 @@ pub fn draw_app(
         ]))
         .style(Style::default().bg(theme.background));
         frame.render_widget(footer_p, footer_area);
+
+        // Draw Context Menu Popup if open
+        let context_menu_open = first_res
+            .and_then(|r| r.metadata.get("context_menu_open").map(|s| s == "true"))
+            .unwrap_or(false);
+        if context_menu_open {
+            let context_menu_selected_idx = first_res
+                .and_then(|r| r.metadata.get("context_menu_selected_idx").and_then(|s| s.parse::<usize>().ok()))
+                .unwrap_or(0);
+
+            let menu_options = vec![
+                if is_zh { "▶ 打开 (Enter)" } else { "▶ Open (Enter)" },
+                if is_zh { "📋 复制 (Copy)" } else { "📋 Copy" },
+                if is_zh { "✂️ 剪切 (Cut)" } else { "✂️ Cut" },
+                if is_zh { "📥 粘贴 (Paste)" } else { "📥 Paste" },
+                if is_zh { "✏️ 重命名 (Rename)" } else { "✏️ Rename" },
+                if is_zh { "🗑️ 删除 (Delete)" } else { "🗑️ Delete" },
+                if is_zh { "📄 新建文件 (New File)" } else { "📄 New File" },
+                if is_zh { "📁 新建文件夹 (New Dir)" } else { "📁 New Folder" },
+                if is_zh { "ℹ️ 属性 (Properties)" } else { "ℹ️ Properties" },
+                if is_zh { "❌ 取消 (Cancel)" } else { "❌ Cancel" },
+            ];
+
+            let menu_title = if is_zh { " 操作菜单 " } else { " Context Menu " };
+            let menu_block = Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))
+                .title(menu_title);
+
+            let opt_items: Vec<ListItem> = menu_options
+                .iter()
+                .enumerate()
+                .map(|(idx, opt)| {
+                    let is_hovered = idx == context_menu_selected_idx;
+                    let style = if is_hovered {
+                        Style::default().bg(theme.selection).fg(theme.accent).add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(theme.foreground)
+                    };
+                    ListItem::new(Line::from(Span::styled(*opt, style)))
+                })
+                .collect();
+            let opt_list = List::new(opt_items).block(menu_block).style(Style::default().bg(theme.background));
+            
+            let popup_area = fixed_centered_rect(32, 12, area);
+            frame.render_widget(Clear, popup_area); // clear underneath
+            frame.render_widget(opt_list, popup_area);
+        }
 
         return;
     }
@@ -1831,12 +1999,18 @@ pub fn draw_app(
         format!(" Matches (Found {}) ", results.len())
     };
 
+    let is_results_focused = main_focus_pane == 1;
     let results_block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(theme.border))
+        .border_style(Style::default().fg(if is_results_focused { theme.accent } else { theme.border }))
+        .border_type(if is_results_focused {
+            ratatui::widgets::BorderType::Double
+        } else {
+            ratatui::widgets::BorderType::Plain
+        })
         .title(Span::styled(
             matches_title,
-            Style::default().fg(theme.border),
+            Style::default().fg(if is_results_focused { theme.accent } else { theme.border }),
         ));
 
     let list_widget = List::new(items_list)
