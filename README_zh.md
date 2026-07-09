@@ -127,8 +127,7 @@
  | :--- | :--- |
  | `Char` / `Backspace` | 输入 / 修改搜索查询 |
  | `↑` / `↓` &nbsp;·&nbsp; `Ctrl-p/n` &nbsp;·&nbsp; `Ctrl-k/j` | 在结果列表中上下导航 |
- | `Tab` / `Shift-Tab` | 在搜索框和结果匹配列表之间切换焦点 |
- | `Left` / `Right` | 左右移动切换当前激活的插件分类标签页 |
+ | `Tab` / `Shift-Tab` | 左右切换当前激活的插件分类标签页（切换模式） |
  | `Shift-↑` / `Shift-↓` &nbsp;·&nbsp; `Alt-j/k` &nbsp;·&nbsp; `PgUp/PgDn` | 滚动预览区域长文本 |
  | `Enter` | 执行选中项的默认动作 |
  | `F1` | 打开 / 关闭设置面板 |

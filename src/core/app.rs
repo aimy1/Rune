@@ -562,26 +562,19 @@ impl App {
             KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.exit_requested = true;
             }
-            // Tab to switch focus between Search input box and results list
+            // Tab to switch active plugin tabs (modes)
             KeyCode::Tab => {
-                self.main_focus_pane = (self.main_focus_pane + 1) % 2;
+                let count = self.plugins.len() + 1; // +1 for "All" tab
+                self.active_plugin_idx = (self.active_plugin_idx + 1) % count;
+                self.update_search();
             }
             KeyCode::BackTab => {
-                self.main_focus_pane = if self.main_focus_pane == 0 { 1 } else { 0 };
-            }
-            // Left/Right arrow keys to switch active plugin tabs
-            KeyCode::Left => {
                 let count = self.plugins.len() + 1; // +1 for "All" tab
                 if self.active_plugin_idx == 0 {
                     self.active_plugin_idx = count - 1;
                 } else {
                     self.active_plugin_idx -= 1;
                 }
-                self.update_search();
-            }
-            KeyCode::Right => {
-                let count = self.plugins.len() + 1; // +1 for "All" tab
-                self.active_plugin_idx = (self.active_plugin_idx + 1) % count;
                 self.update_search();
             }
             // Scroll preview pane using Shift-Up/Down, PageUp/PageDown, or Alt-j/k

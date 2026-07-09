@@ -128,8 +128,7 @@
  | :--- | :--- |
  | `Char` / `Backspace` | Type / edit search query |
  | `↑` / `↓` &nbsp;·&nbsp; `Ctrl-p/n` &nbsp;·&nbsp; `Ctrl-k/j` | Navigate result list |
- | `Tab` / `Shift-Tab` | Switch focus between search box and results list |
- | `Left` / `Right` | Switch active plugin category tab |
+ | `Tab` / `Shift-Tab` | Switch active plugin category tab (mode) |
  | `Shift-↑` / `Shift-↓` &nbsp;·&nbsp; `Alt-j/k` &nbsp;·&nbsp; `PgUp/PgDn` | Scroll preview pane |
  | `Enter` | Execute primary action |
  | `F1` | Open / close Settings dashboard |
