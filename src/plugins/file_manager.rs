@@ -1420,25 +1420,34 @@ impl Plugin for FileManagerPlugin {
 
         // --- 2. Alt-Keys and Keys requiring selection (Available in all panes if an item is selected) ---
         if let Some(selected) = selected_item {
-            if selected.id != ".." {
-                let selected_path = PathBuf::from(&selected.id);
-                if key.modifiers.contains(KeyModifiers::ALT) {
-                    match key.code {
-                        KeyCode::Char('c') | KeyCode::Char('C') => {
+            if key.modifiers.contains(KeyModifiers::ALT) {
+                match key.code {
+                    KeyCode::Char('c') | KeyCode::Char('C') => {
+                        if selected.id != ".." {
+                            let selected_path = PathBuf::from(&selected.id);
                             if let Ok(mut guard) = self.clipboard.write() {
                                 *guard = Some((selected_path.clone(), ClipboardOp::Copy));
                             }
                             ctx.message = Some(format!("Copied: {}", selected.title));
-                            return true;
+                        } else {
+                            ctx.message = Some("Cannot copy parent directory".to_string());
                         }
-                        KeyCode::Char('x') | KeyCode::Char('X') => {
+                        return true;
+                    }
+                    KeyCode::Char('x') | KeyCode::Char('X') => {
+                        if selected.id != ".." {
+                            let selected_path = PathBuf::from(&selected.id);
                             if let Ok(mut guard) = self.clipboard.write() {
                                 *guard = Some((selected_path.clone(), ClipboardOp::Cut));
                             }
                             ctx.message = Some(format!("Cut: {}", selected.title));
-                            return true;
+                        } else {
+                            ctx.message = Some("Cannot cut parent directory".to_string());
                         }
-                        KeyCode::Char('d') | KeyCode::Char('D') => {
+                        return true;
+                    }
+                    KeyCode::Char('d') | KeyCode::Char('D') => {
+                        if selected.id != ".." {
                             if let Ok(mut open) = self.delete_confirm_open.write() {
                                 *open = true;
                             }
@@ -1449,9 +1458,14 @@ impl Plugin for FileManagerPlugin {
                                 *idx = 0;
                             }
                             ctx.refresh_search = true;
-                            return true;
+                        } else {
+                            ctx.message = Some("Cannot delete parent directory".to_string());
                         }
-                        KeyCode::Char('r') | KeyCode::Char('R') => {
+                        return true;
+                    }
+                    KeyCode::Char('r') | KeyCode::Char('R') => {
+                        if selected.id != ".." {
+                            let selected_path = PathBuf::from(&selected.id);
                             let current_name = selected_path.file_name()
                                 .map(|s| s.to_string_lossy().to_string())
                                 .unwrap_or_default();
@@ -1468,11 +1482,16 @@ impl Plugin for FileManagerPlugin {
                                 *action = InputDialogAction::Rename;
                             }
                             ctx.refresh_search = true;
-                            return true;
+                        } else {
+                            ctx.message = Some("Cannot rename parent directory".to_string());
                         }
-                        _ => {}
+                        return true;
                     }
-                } else if key.code == KeyCode::Delete {
+                    _ => {}
+                }
+            } else if key.code == KeyCode::Delete {
+                if selected.id != ".." {
+                    let selected_path = PathBuf::from(&selected.id);
                     if let Ok(mut open) = self.delete_confirm_open.write() {
                         *open = true;
                     }
@@ -1480,11 +1499,13 @@ impl Plugin for FileManagerPlugin {
                         *id = selected_path.to_string_lossy().to_string();
                     }
                     if let Ok(mut idx) = self.delete_confirm_selected_idx.write() {
-                        *idx = 0; // Default to "No"
+                        *idx = 0;
                     }
                     ctx.refresh_search = true;
-                    return true;
+                } else {
+                    ctx.message = Some("Cannot delete parent directory".to_string());
                 }
+                return true;
             }
         }
 
