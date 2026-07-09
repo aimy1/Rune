@@ -1,4 +1,4 @@
-
+<div align="center">
  
  # ᚱ Rune
  
@@ -18,12 +18,11 @@
  **🌐 Language / 语言**
  
  [**English**](README.md) · [**简体中文**](README_zh.md)
-
+ 
  </div>
  
  ---
- <img width="2323" height="1386" alt="屏幕截图_20260709_104146" src="https://github.com/user-attachments/assets/fc81174e-cd58-41db-96be-595129827d92" />
-<img width="2296" height="1353" alt="屏幕截图_20260709_104210" src="https://github.com/user-attachments/assets/afe25b9d-5e19-48b4-8672-ee8a2aaf4f06" />
+ <img width="2323" height="1386" alt="屏幕截图_20260709_104146" src="https://github.com/user-attachments/assets/efefd1ee-4bc2-4183-9958-5315502e9fd5" />
 
  ## 📖 Overview
  
