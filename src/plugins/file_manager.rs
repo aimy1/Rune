@@ -1011,6 +1011,8 @@ impl Plugin for FileManagerPlugin {
                                             ctx.message = Some(format!("Rename failed: {e}"));
                                         } else {
                                             ctx.message = Some(format!("Renamed to: {}", buf));
+                                            ctx.new_query = Some(String::new());
+                                            ctx.focus_target = Some(buf.clone());
                                         }
                                     }
                                 }
@@ -1023,6 +1025,8 @@ impl Plugin for FileManagerPlugin {
                                     ctx.message = Some(format!("Failed to create file: {e}"));
                                 } else {
                                     ctx.message = Some(format!("Created file: {}", buf));
+                                    ctx.new_query = Some(String::new());
+                                    ctx.focus_target = Some(buf.clone());
                                 }
                             }
                             InputDialogAction::NewFolder => {
@@ -1033,6 +1037,8 @@ impl Plugin for FileManagerPlugin {
                                     ctx.message = Some(format!("Failed to create folder: {e}"));
                                 } else {
                                     ctx.message = Some(format!("Created folder: {}", buf));
+                                    ctx.new_query = Some(String::new());
+                                    ctx.focus_target = Some(buf.clone());
                                 }
                             }
                         }
