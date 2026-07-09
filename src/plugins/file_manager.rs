@@ -1224,14 +1224,17 @@ impl Plugin for FileManagerPlugin {
                         }
                         8 => { // Properties
                             if let Some(selected) = selected_item {
-                                if let Ok(mut open) = self.properties_dialog_open.write() {
-                                    *open = true;
-                                }
-                                if let Ok(mut id) = self.properties_dialog_item_id.write() {
-                                    *id = selected.id.clone();
+                                if selected.id != ".." {
+                                    if let Ok(mut open) = self.properties_dialog_open.write() {
+                                        *open = true;
+                                    }
+                                    if let Ok(mut id) = self.properties_dialog_item_id.write() {
+                                        *id = selected.id.clone();
+                                    }
                                 }
                             }
                         }
+                        9 => {} // Cancel (already closed)
                         _ => {}
                     }
                     return true;
@@ -1248,7 +1251,7 @@ impl Plugin for FileManagerPlugin {
         if key.modifiers.contains(KeyModifiers::ALT) {
             match key.code {
                 // F4/Alt-T: Terminal
-                KeyCode::Char('t') => {
+                KeyCode::Char('t') | KeyCode::Char('T') => {
                     ctx.run_command(ctx.shell.clone(), vec![], true);
                     ctx.exit_requested = true;
                     let cd_cmd = format!("cd '{}' && exec {}", current_dir.to_string_lossy(), ctx.shell);
@@ -1256,13 +1259,13 @@ impl Plugin for FileManagerPlugin {
                     return true;
                 }
                 // Alt-O: Open in system graphical file manager
-                KeyCode::Char('o') => {
+                KeyCode::Char('o') | KeyCode::Char('O') => {
                     ctx.run_command("xdg-open".to_string(), vec![current_dir.to_string_lossy().to_string()], false);
                     ctx.message = Some("Opening folder in system file manager".to_string());
                     return true;
                 }
                 // Alt-H: Toggle showing hidden files
-                KeyCode::Char('h') => {
+                KeyCode::Char('h') | KeyCode::Char('H') => {
                     if let Ok(mut show) = self.show_hidden.write() {
                         *show = !*show;
                         ctx.message = Some(if *show {
@@ -1309,7 +1312,7 @@ impl Plugin for FileManagerPlugin {
                     return true;
                 }
                 // Alt-V: Paste
-                KeyCode::Char('v') => {
+                KeyCode::Char('v') | KeyCode::Char('V') => {
                     let clip = self.clipboard.read().ok().and_then(|g| g.clone());
                     if let Some((src_path, op)) = clip {
                         let filename = src_path.file_name().unwrap_or_default();
@@ -1393,14 +1396,14 @@ impl Plugin for FileManagerPlugin {
                 let selected_path = PathBuf::from(&selected.id);
                 if key.modifiers.contains(KeyModifiers::ALT) {
                     match key.code {
-                        KeyCode::Char('c') => {
+                        KeyCode::Char('c') | KeyCode::Char('C') => {
                             if let Ok(mut guard) = self.clipboard.write() {
                                 *guard = Some((selected_path.clone(), ClipboardOp::Copy));
                             }
                             ctx.message = Some(format!("Copied: {}", selected.title));
                             return true;
                         }
-                        KeyCode::Char('x') => {
+                        KeyCode::Char('x') | KeyCode::Char('X') => {
                             if let Ok(mut guard) = self.clipboard.write() {
                                 *guard = Some((selected_path.clone(), ClipboardOp::Cut));
                             }
