@@ -1101,6 +1101,8 @@ impl Plugin for FileManagerPlugin {
                                 if let ExecutionResult::Exit = exec_res {
                                     ctx.exit_requested = true;
                                 }
+                            } else {
+                                ctx.message = Some("No item selected to open".to_string());
                             }
                         }
                         1 => { // Copy
@@ -1111,7 +1113,11 @@ impl Plugin for FileManagerPlugin {
                                         *guard = Some((selected_path, ClipboardOp::Copy));
                                     }
                                     ctx.message = Some(format!("Copied: {}", selected.title));
+                                } else {
+                                    ctx.message = Some("Cannot copy parent directory".to_string());
                                 }
+                            } else {
+                                ctx.message = Some("No item selected to copy".to_string());
                             }
                         }
                         2 => { // Cut
@@ -1122,7 +1128,11 @@ impl Plugin for FileManagerPlugin {
                                         *guard = Some((selected_path, ClipboardOp::Cut));
                                     }
                                     ctx.message = Some(format!("Cut: {}", selected.title));
+                                } else {
+                                    ctx.message = Some("Cannot cut parent directory".to_string());
                                 }
+                            } else {
+                                ctx.message = Some("No item selected to cut".to_string());
                             }
                         }
                         3 => { // Paste
@@ -1182,7 +1192,11 @@ impl Plugin for FileManagerPlugin {
                                     if let Ok(mut action) = self.input_dialog_action.write() {
                                         *action = InputDialogAction::Rename;
                                     }
+                                } else {
+                                    ctx.message = Some("Cannot rename parent directory".to_string());
                                 }
+                            } else {
+                                ctx.message = Some("No item selected to rename".to_string());
                             }
                         }
                         5 => { // Delete
@@ -1197,7 +1211,11 @@ impl Plugin for FileManagerPlugin {
                                     if let Ok(mut idx) = self.delete_confirm_selected_idx.write() {
                                         *idx = 0; // Default to "No"
                                     }
+                                } else {
+                                    ctx.message = Some("Cannot delete parent directory".to_string());
                                 }
+                            } else {
+                                ctx.message = Some("No item selected to delete".to_string());
                             }
                         }
                         6 => { // New File
@@ -1237,7 +1255,11 @@ impl Plugin for FileManagerPlugin {
                                     if let Ok(mut id) = self.properties_dialog_item_id.write() {
                                         *id = selected.id.clone();
                                     }
+                                } else {
+                                    ctx.message = Some("Cannot view properties of parent directory".to_string());
                                 }
+                            } else {
+                                ctx.message = Some("No item selected to view properties".to_string());
                             }
                         }
                         9 => {} // Cancel (already closed)
@@ -1621,16 +1643,14 @@ impl Plugin for FileManagerPlugin {
         if focus_pane == 1 {
             match key.code {
                 KeyCode::Char('m') | KeyCode::Char('M') => {
-                    if selected_item.is_some() {
-                        if let Ok(mut open) = self.context_menu_open.write() {
-                            *open = true;
-                        }
-                        if let Ok(mut idx) = self.context_menu_selected_idx.write() {
-                            *idx = 0;
-                        }
-                        ctx.refresh_search = true;
-                        return true;
+                    if let Ok(mut open) = self.context_menu_open.write() {
+                        *open = true;
                     }
+                    if let Ok(mut idx) = self.context_menu_selected_idx.write() {
+                        *idx = 0;
+                    }
+                    ctx.refresh_search = true;
+                    return true;
                 }
                 KeyCode::Left => {
                     if let Ok(mut guard) = self.focus_pane.write() {

@@ -1117,17 +1117,55 @@ pub fn draw_app(
                 .border_style(Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))
                 .title(menu_title);
 
+            let selected_idx = list_state.selected().unwrap_or(0);
+            let selected_item = if !results.is_empty() && selected_idx < results.len() {
+                let item = &results[selected_idx];
+                if item.id == "dummy_metadata_carrier" {
+                    None
+                } else {
+                    Some(item)
+                }
+            } else {
+                None
+            };
+
+            let has_selection = selected_item.is_some();
+            let has_valid_selection = if let Some(item) = selected_item {
+                item.id != ".."
+            } else {
+                false
+            };
+
             let opt_items: Vec<ListItem> = menu_options
                 .iter()
                 .enumerate()
                 .map(|(idx, opt)| {
                     let is_hovered = idx == context_menu_selected_idx;
-                    let style = if is_hovered {
+                    let is_disabled = match idx {
+                        0 => !has_selection,
+                        1 | 2 | 4 | 5 | 8 => !has_valid_selection,
+                        _ => false,
+                    };
+                    
+                    let style = if is_disabled {
+                        if is_hovered {
+                            Style::default().bg(theme.selection).fg(theme.border).add_modifier(Modifier::DIM)
+                        } else {
+                            Style::default().fg(theme.border).add_modifier(Modifier::DIM)
+                        }
+                    } else if is_hovered {
                         Style::default().bg(theme.selection).fg(theme.accent).add_modifier(Modifier::BOLD)
                     } else {
                         Style::default().fg(theme.foreground)
                     };
-                    ListItem::new(Line::from(Span::styled(*opt, style)))
+                    
+                    let opt_text = if is_disabled {
+                        format!("{} (N/A)", opt)
+                    } else {
+                        opt.to_string()
+                    };
+                    
+                    ListItem::new(Line::from(Span::styled(opt_text, style)))
                 })
                 .collect();
             let opt_list = List::new(opt_items).block(menu_block).style(Style::default().bg(theme.background));
