@@ -20,7 +20,6 @@
  
  </div>
  ---
- <img width="2346" height="1425" alt="屏幕截图_20260709_103943" src="https://github.com/user-attachments/assets/5bf2a663-63e9-4be2-8ac0-f2fc7fbf72df" />
 
  ## 📖 项目简介
  
