@@ -45,7 +45,6 @@
  ---
  
  ## 📁 文件管理器控制面板 `F2`
- <img width="2397" height="1432" alt="屏幕截图_20260709_103741" src="https://github.com/user-attachments/assets/b3e2d8ee-934c-4a0d-be6f-0ba17b0aa923" />
 
  按下 **`F2`** 呼出双栏文件浏览器。焦点切换循环：收藏夹侧边栏 ➔ 文件列表 ➔ 当前路径栏 ➔ 搜索过滤框。
  
