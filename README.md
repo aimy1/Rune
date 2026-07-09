@@ -1,4 +1,4 @@
-<div align="center">
+<img width="2296" height="1353" alt="屏幕截图_20260709_104210" src="https://github.com/user-attachments/assets/4e573446-d9a2-4bd1-8e48-493ab6c26568" /><div align="center">
  
  # ᚱ Rune
  
@@ -18,11 +18,13 @@
  **🌐 Language / 语言**
  
  [**English**](README.md) · [**简体中文**](README_zh.md)
- 
+
  </div>
  
  ---
- 
+ <img width="2323" height="1386" alt="屏幕截图_20260709_104146" src="https://github.com/user-attachments/assets/fc81174e-cd58-41db-96be-595129827d92" />
+<img width="2296" height="1353" alt="屏幕截图_20260709_104210" src="https://github.com/user-attachments/assets/afe25b9d-5e19-48b4-8672-ee8a2aaf4f06" />
+
  ## 📖 Overview
  
  Rune is a modern, lightweight, keyboard-driven **TUI launcher** for Linux. It serves as a central command entry point — launch apps, browse files, run shell commands, query AI, manage services, and browse clipboard history, all without leaving your terminal.
