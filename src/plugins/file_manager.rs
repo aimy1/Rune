@@ -50,9 +50,24 @@ pub struct FileManagerPlugin {
 }
 
 impl FileManagerPlugin {
-    pub fn new() -> Self {
-        let current_dir = std::env::current_dir()
-            .unwrap_or_else(|_| dirs::home_dir().unwrap_or_else(|| PathBuf::from("/home/fd")));
+    pub fn new(show_hidden: bool, start_dir: &str) -> Self {
+        let current_dir = if start_dir == "~" {
+            dirs::home_dir().unwrap_or_else(|| PathBuf::from("/home/fd"))
+        } else if start_dir.starts_with("~/") {
+            if let Some(home) = dirs::home_dir() {
+                home.join(&start_dir[2..])
+            } else {
+                PathBuf::from(start_dir)
+            }
+        } else {
+            PathBuf::from(start_dir)
+        };
+        let current_dir = if current_dir.exists() && current_dir.is_dir() {
+            current_dir
+        } else {
+            std::env::current_dir()
+                .unwrap_or_else(|_| dirs::home_dir().unwrap_or_else(|| PathBuf::from("/home/fd")))
+        };
         Self {
             current_dir: RwLock::new(current_dir.clone()),
             clipboard: RwLock::new(None),
@@ -63,7 +78,7 @@ impl FileManagerPlugin {
             view_mode: RwLock::new(ViewMode::Normal),
             context_menu_open: RwLock::new(false),
             context_menu_selected_idx: RwLock::new(0),
-            show_hidden: RwLock::new(false),
+            show_hidden: RwLock::new(show_hidden),
             input_dialog_open: RwLock::new(false),
             input_dialog_title: RwLock::new(String::new()),
             input_dialog_buffer: RwLock::new(String::new()),
@@ -73,6 +88,16 @@ impl FileManagerPlugin {
             delete_confirm_open: RwLock::new(false),
             delete_confirm_item_id: RwLock::new(String::new()),
             delete_confirm_selected_idx: RwLock::new(0),
+        }
+    }
+
+    pub fn get_show_hidden(&self) -> bool {
+        self.show_hidden.read().map(|b| *b).unwrap_or(false)
+    }
+
+    pub fn set_show_hidden(&self, value: bool) {
+        if let Ok(mut show) = self.show_hidden.write() {
+            *show = value;
         }
     }
 

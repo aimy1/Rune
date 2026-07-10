@@ -45,6 +45,8 @@ pub struct PluginsConfig {
     pub ai_api_key: String,
     pub ai_model: String,
     pub ai_api_url: String,
+    pub file_manager_show_hidden: bool,
+    pub file_manager_start_dir: String,
 }
 
 impl Default for Config {
@@ -87,6 +89,8 @@ impl Default for Config {
                 ai_api_key: "".to_string(),
                 ai_model: "gpt-4o-mini".to_string(),
                 ai_api_url: "https://api.openai.com/v1".to_string(),
+                file_manager_show_hidden: false,
+                file_manager_start_dir: "~".to_string(),
             },
         }
     }

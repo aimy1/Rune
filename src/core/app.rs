@@ -84,6 +84,9 @@ impl App {
 
         let scanned_fonts = scan_monospace_fonts();
 
+        let show_hidden = config.plugins.file_manager_show_hidden;
+        let start_dir = config.plugins.file_manager_start_dir.clone();
+
         let mut app = Self {
             config,
             theme_styles,
@@ -106,7 +109,10 @@ impl App {
             scanned_fonts,
             settings_input_mode: false,
             settings_input_buffer: String::new(),
-            file_manager: crate::plugins::FileManagerPlugin::new(),
+            file_manager: crate::plugins::FileManagerPlugin::new(
+                show_hidden,
+                &start_dir,
+            ),
             file_manager_open: false,
             main_focus_pane: 0,
         };
@@ -170,11 +176,14 @@ impl App {
             0 => 5, // TUI themes
             1 => 2, // UI language
             2 => 5, // editor (+ custom)
-            3 => 14, // plugins toggles (updated from 13 to 14)
-            4 => 3, // AI providers
-            5 => 3, // AI configs (Key, Model, URL)
-            6 => 5, // Files Max Depth
-            7 => 0, // About (0 options, focus stays on category pane)
+            3 => 4, // Terminal Shell (bash, zsh, sh, custom)
+            4 => self.scanned_fonts.len(), // Monospace fonts
+            5 => 14, // plugins toggles (updated from 13 to 14)
+            6 => 3, // File Search Settings (Max Depth, Search Paths, Ignore Paths)
+            7 => 2, // File Manager Settings (Show Hidden, Start Dir)
+            8 => 3, // AI providers
+            9 => 3, // AI configs (Key, Model, URL)
+            10 => 0, // About (0 options, focus stays on category pane)
             _ => 0,
         }
     }
@@ -211,6 +220,19 @@ impl App {
                 }
             }
             3 => {
+                let shells = vec!["bash".to_string(), "zsh".to_string(), "sh".to_string()];
+                if self.settings_selected_option < shells.len() {
+                    let chosen = shells[self.settings_selected_option].clone();
+                    self.config.general.shell = chosen;
+                }
+            }
+            4 => {
+                if self.settings_selected_option < self.scanned_fonts.len() {
+                    let chosen = self.scanned_fonts[self.settings_selected_option].clone();
+                    self.config.general.font = chosen;
+                }
+            }
+            5 => {
                 // Toggle plugin enable state on/off
                 match self.settings_selected_option {
                     0 => self.config.plugins.applications = !self.config.plugins.applications,
@@ -234,7 +256,14 @@ impl App {
                 self.active_plugin_idx = 0; // reset to All tab
                 self.update_search();
             }
-            4 => {
+            7 => {
+                // File Manager Option 0: Show Hidden toggle
+                if self.settings_selected_option == 0 {
+                    self.config.plugins.file_manager_show_hidden = !self.config.plugins.file_manager_show_hidden;
+                    self.file_manager.set_show_hidden(self.config.plugins.file_manager_show_hidden);
+                }
+            }
+            8 => {
                 let providers = vec!["openai".to_string(), "gemini".to_string(), "ollama".to_string()];
                 if self.settings_selected_option < providers.len() {
                     let chosen = providers[self.settings_selected_option].clone();
@@ -261,19 +290,6 @@ impl App {
                     self.plugins = load_all_plugins(&self.config);
                 }
             }
-            6 => {
-                let depths = vec![2, 3, 4, 5, 6];
-                if self.settings_selected_option < depths.len() {
-                    self.config.plugins.files_max_depth = depths[self.settings_selected_option];
-                    
-                    // Invalidate the search cache to trigger a fresh walkdir sweep with new depth setting
-                    let cache_file = self.cache_dir.join("files.txt");
-                    let _ = std::fs::remove_file(cache_file);
-                    
-                    // Reload files plugin live
-                    self.plugins = load_all_plugins(&self.config);
-                }
-            }
             _ => {}
         }
 
@@ -297,7 +313,50 @@ impl App {
                     self.config.general.editor = input;
                 }
             }
-            5 => {
+            3 => {
+                if !input.is_empty() {
+                    self.config.general.shell = input;
+                }
+            }
+            6 => {
+                match self.settings_selected_option {
+                    0 => {
+                        if let Ok(depth) = input.parse::<usize>() {
+                            self.config.plugins.files_max_depth = depth;
+                            // Invalidate the search cache to trigger a fresh walkdir sweep with new depth setting
+                            let cache_file = self.cache_dir.join("files.txt");
+                            let _ = std::fs::remove_file(cache_file);
+                            // Reload files plugin live
+                            self.plugins = load_all_plugins(&self.config);
+                        }
+                    }
+                    1 => {
+                        let paths: Vec<String> = input.split(',')
+                            .map(|s| s.trim().to_string())
+                            .filter(|s| !s.is_empty())
+                            .collect();
+                        self.config.plugins.files_paths = paths;
+                        // Reload files plugin live
+                        self.plugins = load_all_plugins(&self.config);
+                    }
+                    2 => {
+                        let ignore: Vec<String> = input.split(',')
+                            .map(|s| s.trim().to_string())
+                            .filter(|s| !s.is_empty())
+                            .collect();
+                        self.config.plugins.files_ignore = ignore;
+                        // Reload files plugin live
+                        self.plugins = load_all_plugins(&self.config);
+                    }
+                    _ => {}
+                }
+            }
+            7 => {
+                if self.settings_selected_option == 1 {
+                    self.config.plugins.file_manager_start_dir = input;
+                }
+            }
+            9 => {
                 match self.settings_selected_option {
                     0 => self.config.plugins.ai_api_key = input,
                     1 => {
@@ -396,19 +455,19 @@ impl App {
                     self.settings_focused_pane = 0;
                 }
                 KeyCode::Right => {
-                    if self.settings_selected_category != 7 {
+                    if self.settings_selected_category != 10 {
                         self.settings_focused_pane = 1;
                     }
                 }
                 KeyCode::Tab => {
-                    if self.settings_selected_category != 7 {
+                    if self.settings_selected_category != 10 {
                         self.settings_focused_pane = (self.settings_focused_pane + 1) % 2;
                     } else {
                         self.settings_focused_pane = 0;
                     }
                 }
                 KeyCode::BackTab => {
-                    if self.settings_selected_category != 7 {
+                    if self.settings_selected_category != 10 {
                         self.settings_focused_pane = (self.settings_focused_pane + 1) % 2;
                     } else {
                         self.settings_focused_pane = 0;
@@ -417,7 +476,7 @@ impl App {
                 KeyCode::Up => {
                     if self.settings_focused_pane == 0 {
                         if self.settings_selected_category == 0 {
-                            self.settings_selected_category = 7;
+                            self.settings_selected_category = 10;
                         } else {
                             self.settings_selected_category -= 1;
                         }
@@ -435,7 +494,7 @@ impl App {
                 }
                 KeyCode::Down => {
                     if self.settings_focused_pane == 0 {
-                        self.settings_selected_category = (self.settings_selected_category + 1) % 8;
+                        self.settings_selected_category = (self.settings_selected_category + 1) % 11;
                         self.settings_selected_option = 0;
                     } else {
                         let count = self.get_options_count();
@@ -448,7 +507,10 @@ impl App {
                     if self.settings_focused_pane == 1 {
                         let is_custom_trigger = match self.settings_selected_category {
                             2 => self.settings_selected_option == 4, // Custom Editor
-                            5 => true, // Any AI Config field
+                            3 => self.settings_selected_option == 3, // Custom Shell
+                            6 => true, // File Search Settings: Max Depth, Search Paths, Ignore Paths
+                            7 => self.settings_selected_option == 1, // File Manager Start Dir
+                            9 => true, // Any AI Config field
                             _ => false,
                         };
                         
@@ -456,7 +518,18 @@ impl App {
                             self.settings_input_mode = true;
                             self.settings_input_buffer = match self.settings_selected_category {
                                 2 => self.config.general.editor.clone(),
-                                5 => match self.settings_selected_option {
+                                3 => self.config.general.shell.clone(),
+                                6 => match self.settings_selected_option {
+                                    0 => self.config.plugins.files_max_depth.to_string(),
+                                    1 => self.config.plugins.files_paths.join(","),
+                                    2 => self.config.plugins.files_ignore.join(","),
+                                    _ => String::new(),
+                                },
+                                7 => match self.settings_selected_option {
+                                    1 => self.config.plugins.file_manager_start_dir.clone(),
+                                    _ => String::new(),
+                                },
+                                9 => match self.settings_selected_option {
                                     0 => self.config.plugins.ai_api_key.clone(),
                                     1 => self.config.plugins.ai_model.clone(),
                                     2 => self.config.plugins.ai_api_url.clone(),
@@ -468,7 +541,7 @@ impl App {
                             self.apply_and_save_setting();
                         }
                     } else {
-                        if self.settings_selected_category != 7 {
+                        if self.settings_selected_category != 10 {
                             self.settings_focused_pane = 1;
                             self.settings_selected_option = 0;
                         }
@@ -489,6 +562,13 @@ impl App {
 
             let mut ctx = Context::new(self.config.general.editor.clone(), self.config.general.shell.clone());
             if self.file_manager.handle_key(key, &self.query, selected_item, &mut ctx) {
+                // Keep config in sync if show_hidden is changed via hotkey Alt-h
+                let current_fm_show_hidden = self.file_manager.get_show_hidden();
+                if current_fm_show_hidden != self.config.plugins.file_manager_show_hidden {
+                    self.config.plugins.file_manager_show_hidden = current_fm_show_hidden;
+                    let _ = self.config.save();
+                }
+
                 if ctx.exit_requested {
                     if let Some((cmd, args, in_term)) = ctx.command_to_run {
                         self.command_to_run = Some((cmd, args, in_term));

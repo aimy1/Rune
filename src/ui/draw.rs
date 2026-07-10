@@ -207,28 +207,34 @@ fn draw_settings_screen(
     let left_pane = workspace[0];
     let right_pane = workspace[1];
 
-    // Left Category List (Expanded to 8 categories)
+    // Left Category List (Expanded to 11 categories)
     let categories = if is_zh {
         vec![
             "1. 主题选择 (TUI Theme)",
             "2. 语言切换 (UI Language)",
             "3. 文本编辑器 (Text Editor)",
-            "4. 插件管理 (Active Plugins)",
-            "5. AI 提供商 (AI Provider)",
-            "6. AI 参数配置 (AI Credentials)",
-            "7. 文件搜索深度 (Files Max Depth)",
-            "8. 关于项目 (About Rune)",
+            "4. 终端 Shell (Terminal Shell)",
+            "5. 字体选择 (TUI Font)",
+            "6. 插件管理 (Active Plugins)",
+            "7. 文件搜索设置 (File Search)",
+            "8. 文件管理器设置 (File Manager)",
+            "9. AI 提供商 (AI Provider)",
+            "10. AI 参数配置 (AI Credentials)",
+            "11. 关于项目 (About Rune)",
         ]
     } else {
         vec![
             "1. TUI Theme",
             "2. UI Language",
             "3. Text Editor",
-            "4. Active Plugins",
-            "5. AI Provider",
-            "6. AI Credentials",
-            "7. Files Max Depth",
-            "8. About Rune",
+            "4. Terminal Shell",
+            "5. TUI Font",
+            "6. Active Plugins",
+            "7. File Search Settings",
+            "8. File Manager Settings",
+            "9. AI Provider",
+            "10. AI Credentials",
+            "11. About Rune",
         ]
     };
 
@@ -326,6 +332,29 @@ fn draw_settings_screen(
         }
         3 => {
             options = vec![
+                "bash".to_string(),
+                "zsh".to_string(),
+                "sh".to_string(),
+                format!("custom ({})", config.general.shell),
+            ];
+            active_val = config.general.shell.clone();
+            desc = if is_zh {
+                "设置默认终端 Shell。选择最后一项按 Enter 可手动输入自定义 Shell。".to_string()
+            } else {
+                "Configure default terminal shell. Select the last option and press Enter to type custom shell.".to_string()
+            };
+        }
+        4 => {
+            options = _scanned_fonts.to_vec();
+            active_val = config.general.font.clone();
+            desc = if is_zh {
+                "选择主界面所用字体。字体更改适用于支持字体切换的终端环境。".to_string()
+            } else {
+                "Select monospace UI font. Applies only if terminal shell supports font rendering.".to_string()
+            };
+        }
+        5 => {
+            options = vec![
                 "applications".to_string(),
                 "files".to_string(),
                 "file_manager".to_string(),
@@ -347,7 +376,35 @@ fn draw_settings_screen(
                 "Toggle activation status of specific functional plugins. Press Enter to enable/disable. Disabling unused plugins speeds up search.".to_string()
             };
         }
-        4 => {
+        6 => {
+            options = vec![
+                format!("Max Depth: {}", config.plugins.files_max_depth),
+                format!("Paths: {}", config.plugins.files_paths.join(", ")),
+                format!("Ignore: {}", config.plugins.files_ignore.join(", ")),
+            ];
+            desc = if is_zh {
+                "配置本地文件搜索的相关参数。包括遍历最大目录级数，以及扫描根目录和忽略黑名单目录，支持以逗号分隔输入多个路径。".to_string()
+            } else {
+                "Configure file scanner parameters. Includes max search depth, scan paths, and ignored directories (supports comma-separated list).".to_string()
+            };
+        }
+        7 => {
+            let show_hidden_str = if config.plugins.file_manager_show_hidden {
+                if is_zh { "显示隐藏文件 (开启)" } else { "Show Hidden Files (ON)" }
+            } else {
+                if is_zh { "显示隐藏文件 (关闭)" } else { "Show Hidden Files (OFF)" }
+            };
+            options = vec![
+                show_hidden_str.to_string(),
+                format!("Start Dir: {}", config.plugins.file_manager_start_dir),
+            ];
+            desc = if is_zh {
+                "配置文件管理器的行为参数。第一个选项可开启或隐藏以点(.)开头的隐藏文件，第二个选项可自定义文件管理器的起始工作目录。".to_string()
+            } else {
+                "Configure file manager settings. Toggles visibility of files starting with dot (.), and specifies initial directory for the file manager.".to_string()
+            };
+        }
+        8 => {
             options = vec!["openai".to_string(), "gemini".to_string(), "ollama".to_string()];
             active_val = config.plugins.ai_provider.clone();
             desc = if is_zh {
@@ -356,7 +413,7 @@ fn draw_settings_screen(
                 "Select AI model provider used by the AI chatbot plugin. Make sure to configure the API key in config.toml.".to_string()
             };
         }
-        5 => {
+        9 => {
             let masked_key = if config.plugins.ai_api_key.is_empty() {
                 "[Not Set]".to_string()
             } else {
@@ -374,22 +431,7 @@ fn draw_settings_screen(
                 "Configure AI chatbot credentials. Select any item and press Enter to edit in the text prompt below.".to_string()
             };
         }
-        6 => {
-            options = vec![
-                "2".to_string(),
-                "3".to_string(),
-                "4".to_string(),
-                "5".to_string(),
-                "6".to_string(),
-            ];
-            active_val = config.plugins.files_max_depth.to_string();
-            desc = if is_zh {
-                "配置文件搜索时深度优先遍历的最大目录级数。级别越深，扫描文件越全面，但也更耗费磁盘性能。".to_string()
-            } else {
-                "Configure maximum directory depth for file system scanning. Deeper scans find more files but consume more I/O.".to_string()
-            };
-        }
-        7 => {
+        10 => {
             options = if is_zh {
                 vec![
                     "项目名称: Rune Launcher".to_string(),
@@ -423,7 +465,7 @@ fn draw_settings_screen(
             let is_hovered = idx == settings_selected_option;
             let is_focused = settings_focused_pane == 1 && is_hovered;
             
-            let is_active = if settings_selected_category == 3 {
+            let is_active = if settings_selected_category == 5 {
                 match opt.as_str() {
                     "applications" => config.plugins.applications,
                     "files" => config.plugins.files,
@@ -441,7 +483,7 @@ fn draw_settings_screen(
                     "network" => config.plugins.network,
                     _ => false,
                 }
-            } else if settings_selected_category == 5 || settings_selected_category == 7 {
+            } else if settings_selected_category == 6 || settings_selected_category == 10 {
                 false
             } else if settings_selected_category == 2 {
                 if idx < 4 {
@@ -449,11 +491,23 @@ fn draw_settings_screen(
                 } else {
                     !["nano", "vim", "nvim", "hx"].contains(&active_val.as_str())
                 }
+            } else if settings_selected_category == 3 {
+                if idx < 3 {
+                    opt == &active_val
+                } else {
+                    !["bash", "zsh", "sh"].contains(&active_val.as_str())
+                }
+            } else if settings_selected_category == 7 {
+                if idx == 0 {
+                    config.plugins.file_manager_show_hidden
+                } else {
+                    false
+                }
             } else {
                 opt == &active_val
             };
             
-            let style = if settings_selected_category == 7 {
+            let style = if settings_selected_category == 10 {
                 Style::default().fg(theme.foreground)
             } else if is_focused {
                 Style::default().bg(theme.selection).fg(theme.accent).add_modifier(Modifier::BOLD)
@@ -463,15 +517,17 @@ fn draw_settings_screen(
                 Style::default().fg(theme.foreground)
             };
             
-            let prefix = if settings_selected_category == 7 {
+            let prefix = if settings_selected_category == 10 {
                 ""
             } else if is_hovered {
                 "▶ "
             } else {
                 "  "
             };
-            let checked = if settings_selected_category == 7 {
+            let checked = if settings_selected_category == 6 || settings_selected_category == 9 || settings_selected_category == 10 {
                 ""
+            } else if settings_selected_category == 7 && idx == 1 {
+                "   "
             } else if is_active {
                 " ✔ "
             } else {
@@ -511,7 +567,18 @@ fn draw_settings_screen(
     let status_text = if settings_input_mode {
         let field_label = match settings_selected_category {
             2 => if is_zh { "编辑编辑器命令: " } else { "Edit Editor Command: " },
-            5 => match settings_selected_option {
+            3 => if is_zh { "编辑 Shell 命令: " } else { "Edit Shell Command: " },
+            6 => match settings_selected_option {
+                0 => if is_zh { "编辑文件搜索最大深度: " } else { "Edit Max Depth: " },
+                1 => if is_zh { "编辑搜索路径 (逗号分隔): " } else { "Edit Search Paths: " },
+                2 => if is_zh { "编辑忽略目录 (逗号分隔): " } else { "Edit Ignore Paths: " },
+                _ => "",
+            },
+            7 => match settings_selected_option {
+                1 => if is_zh { "编辑文件管理器起始工作目录: " } else { "Edit Start Directory: " },
+                _ => "",
+            },
+            9 => match settings_selected_option {
                 0 => if is_zh { "编辑 API Key: " } else { "Edit API Key: " },
                 1 => if is_zh { "编辑模型名称 (Model): " } else { "Edit Model: " },
                 2 => if is_zh { "编辑 API URL 终结点: " } else { "Edit API URL: " },
