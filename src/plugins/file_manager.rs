@@ -128,6 +128,10 @@ impl FileManagerPlugin {
         self.show_hidden.read().map(|b| *b).unwrap_or(false)
     }
 
+    pub fn get_focus_pane(&self) -> usize {
+        self.focus_pane.read().map(|b| *b).unwrap_or(1)
+    }
+
     pub fn set_show_hidden(&self, value: bool) {
         if let Ok(mut show) = self.show_hidden.write() {
             *show = value;
@@ -471,6 +475,7 @@ impl Plugin for FileManagerPlugin {
         let sidebar_focused = focus_pane == 0;
         let sidebar_selected_idx = self.sidebar_selected_idx.read().map(|i| *i).unwrap_or(0);
         let show_hidden = self.show_hidden.read().map(|b| *b).unwrap_or(false);
+        let filter_query = if focus_pane == 2 { "" } else { query };
 
         let mut results = Vec::new();
         let mut total_dirs = 0;
@@ -501,10 +506,10 @@ impl Plugin for FileManagerPlugin {
                     total_files += 1;
                 }
 
-                let score = if query.is_empty() {
+                let score = if filter_query.is_empty() {
                     Some(0)
                 } else {
-                    matcher.fuzzy_match(&filename, query).map(|s| s as i64)
+                    matcher.fuzzy_match(&filename, filter_query).map(|s| s as i64)
                 };
 
                 if let Some(score) = score {
@@ -571,10 +576,10 @@ impl Plugin for FileManagerPlugin {
                 metadata.insert("permissions".to_string(), get_permissions_str(parent));
                 metadata.insert("owner".to_string(), get_owner_str(parent));
 
-                let matches_query = if query.is_empty() {
+                let matches_query = if filter_query.is_empty() {
                     true
                 } else {
-                    Matcher::new().fuzzy_match("..", query).is_some()
+                    Matcher::new().fuzzy_match("..", filter_query).is_some()
                 };
 
                 if matches_query {
@@ -609,10 +614,10 @@ impl Plugin for FileManagerPlugin {
                         total_files += 1;
                     }
 
-                    let score = if query.is_empty() {
+                    let score = if filter_query.is_empty() {
                         Some(0)
                     } else {
-                        matcher.fuzzy_match(&filename, query).map(|s| s as i64)
+                        matcher.fuzzy_match(&filename, filter_query).map(|s| s as i64)
                     };
 
                     if let Some(score) = score {
@@ -668,9 +673,9 @@ impl Plugin for FileManagerPlugin {
         }
 
         // Sorting:
-        // If query is empty: sort according to active SortBy and SortOrder, keeping directories first.
-        // If query is not empty: sort by fuzzy match score descending.
-        if query.is_empty() {
+        // If filter_query is empty: sort according to active SortBy and SortOrder, keeping directories first.
+        // If filter_query is not empty: sort by fuzzy match score descending.
+        if filter_query.is_empty() {
             let sort_by = self.sort_by.read().map(|s| *s).unwrap_or(SortBy::Name);
             let sort_order = self.sort_order.read().map(|s| *s).unwrap_or(SortOrder::Ascending);
 
@@ -1784,8 +1789,8 @@ impl Plugin for FileManagerPlugin {
             if new_focus == 2 {
                 // Focus path: fill query with current path string
                 ctx.new_query = Some(current_dir.to_string_lossy().to_string());
-            } else {
-                // Return query to empty for searches
+            } else if focus_pane == 2 {
+                // Return query to empty when leaving path bar
                 ctx.new_query = Some(String::new());
             }
             
@@ -1806,7 +1811,7 @@ impl Plugin for FileManagerPlugin {
         // A. Favorites Sidebar Focus (focus_pane == 0)
         if focus_pane == 0 {
             match key.code {
-                KeyCode::Right => {
+                KeyCode::Right | KeyCode::Char('l') => {
                     if let Ok(mut guard) = self.focus_pane.write() {
                         *guard = 1; // Focus Files list
                     }
@@ -1814,7 +1819,7 @@ impl Plugin for FileManagerPlugin {
                     ctx.message = Some("Focused Files list".to_string());
                     return true;
                 }
-                KeyCode::Up => {
+                KeyCode::Up | KeyCode::Char('k') => {
                     let sidebar_items = get_sidebar_items();
                     let max_idx = sidebar_items.len().saturating_sub(1);
                     if let Ok(mut idx) = self.sidebar_selected_idx.write() {
@@ -1827,7 +1832,7 @@ impl Plugin for FileManagerPlugin {
                     ctx.refresh_search = true;
                     return true;
                 }
-                KeyCode::Down => {
+                KeyCode::Down | KeyCode::Char('j') => {
                     let sidebar_items = get_sidebar_items();
                     let max_idx = sidebar_items.len().saturating_sub(1);
                     if let Ok(mut idx) = self.sidebar_selected_idx.write() {
@@ -1877,18 +1882,38 @@ impl Plugin for FileManagerPlugin {
                     ctx.refresh_search = true;
                     return true;
                 }
+                KeyCode::Esc => {
+                    if let Ok(mut guard) = self.focus_pane.write() {
+                        *guard = 1; // Focus Files list
+                    }
+                    ctx.refresh_search = true;
+                    ctx.message = Some("Focused Files list".to_string());
+                    return true;
+                }
                 _ => {}
             }
-            if key.code != KeyCode::Esc {
-                return true;
-            }
-            return false;
+            return true;
         }
 
         // B. Location Path Bar Focus (focus_pane == 2)
         if focus_pane == 2 {
             if key.code == KeyCode::Enter {
-                let target_path = PathBuf::from(query.trim());
+                let trimmed = query.trim();
+                let expanded = if trimmed == "~" || trimmed.starts_with("~/") {
+                    if let Some(home) = dirs::home_dir() {
+                        if trimmed == "~" {
+                            home
+                        } else {
+                            home.join(&trimmed[2..])
+                        }
+                    } else {
+                        PathBuf::from(trimmed)
+                    }
+                } else {
+                    PathBuf::from(trimmed)
+                };
+
+                let target_path = expanded;
                 if target_path.exists() && target_path.is_dir() {
                     if let Ok(mut mode) = self.view_mode.write() {
                         *mode = ViewMode::Normal;
@@ -1907,16 +1932,35 @@ impl Plugin for FileManagerPlugin {
                 }
                 return true;
             }
+            if key.code == KeyCode::Esc {
+                if let Ok(mut guard) = self.focus_pane.write() {
+                    *guard = 1; // Jump back to files list
+                }
+                ctx.new_query = Some(String::new());
+                ctx.refresh_search = true;
+                ctx.message = Some("Focused Files list".to_string());
+                return true;
+            }
             return false;
         }
 
         // C. Search Box Focus (focus_pane == 3)
         if focus_pane == 3 {
-            if key.code == KeyCode::Enter {
+            if key.code == KeyCode::Enter || key.code == KeyCode::Down {
                 if let Ok(mut guard) = self.focus_pane.write() {
                     *guard = 1; // Focus Files list
                 }
                 ctx.refresh_search = true;
+                ctx.message = Some("Focused Files list".to_string());
+                return true;
+            }
+            if key.code == KeyCode::Esc {
+                if let Ok(mut guard) = self.focus_pane.write() {
+                    *guard = 1; // Focus Files list
+                }
+                ctx.new_query = Some(String::new());
+                ctx.refresh_search = true;
+                ctx.message = Some("Cleared search and focused Files list".to_string());
                 return true;
             }
             return false;
@@ -1998,7 +2042,30 @@ impl Plugin for FileManagerPlugin {
                     }
                     return true;
                 }
-                KeyCode::Left => {
+                KeyCode::Right | KeyCode::Char('l') => {
+                    if let Some(selected) = selected_item {
+                        if selected.id != "dummy_metadata_carrier" {
+                            let is_dir = selected.metadata.get("is_dir").map(|s| s == "true").unwrap_or(false);
+                            if is_dir {
+                                if let Some(path_str) = selected.metadata.get("path") {
+                                    let target_path = PathBuf::from(path_str);
+                                    if let Ok(mut mode) = self.view_mode.write() {
+                                        *mode = ViewMode::Normal;
+                                    }
+                                    if let Ok(mut guard) = self.current_dir.write() {
+                                        *guard = target_path.clone();
+                                    }
+                                    ctx.new_query = Some(String::new());
+                                    ctx.refresh_search = true;
+                                    ctx.message = Some(format!("Entered: {}", target_path.display()));
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                    return true;
+                }
+                KeyCode::Left | KeyCode::Char('h') => {
                     if let Ok(mut guard) = self.focus_pane.write() {
                         *guard = 0; // Focus Sidebar
                     }
@@ -2006,14 +2073,27 @@ impl Plugin for FileManagerPlugin {
                     ctx.message = Some("Focused Favorites sidebar".to_string());
                     return true;
                 }
+                KeyCode::Char('/') => {
+                    if let Ok(mut guard) = self.focus_pane.write() {
+                        *guard = 3; // Focus Search box
+                    }
+                    ctx.refresh_search = true;
+                    ctx.message = Some("Focused Search box".to_string());
+                    return true;
+                }
                 _ => {}
             }
         }
 
-        // Block normal character input in list view to avoid leaks into query
-        if let KeyCode::Char(_) = key.code {
-            if !key.modifiers.contains(KeyModifiers::ALT) && !key.modifiers.contains(KeyModifiers::CONTROL) {
-                return true;
+        // Block normal character input in Sidebar and Files list to avoid leaks into query
+        if focus_pane == 0 || focus_pane == 1 {
+            if let KeyCode::Char(c) = key.code {
+                if !key.modifiers.contains(KeyModifiers::ALT) && !key.modifiers.contains(KeyModifiers::CONTROL) {
+                    if focus_pane == 1 && (c == 'j' || c == 'k') {
+                        return false; // Let app.rs handle list navigation!
+                    }
+                    return true;
+                }
             }
         }
 
