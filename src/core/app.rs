@@ -131,9 +131,26 @@ impl App {
 
     fn update_search(&mut self) {
         if self.file_manager_open {
+            let prev_selected_id = self.results.get(self.selected_idx).map(|r| r.id.clone());
             self.results = self.file_manager.search(&self.query, &self.cache_dir);
-            self.selected_idx = 0;
-            self.list_state.select(Some(0));
+            if let Some(prev_id) = prev_selected_id {
+                if let Some(pos) = self.results.iter().position(|r| r.id == prev_id) {
+                    self.selected_idx = pos;
+                    self.list_state.select(Some(pos));
+                } else if !self.results.is_empty() {
+                    self.selected_idx = self.selected_idx.min(self.results.len() - 1);
+                    self.list_state.select(Some(self.selected_idx));
+                } else {
+                    self.selected_idx = 0;
+                    self.list_state.select(None);
+                }
+            } else if !self.results.is_empty() {
+                self.selected_idx = 0;
+                self.list_state.select(Some(0));
+            } else {
+                self.selected_idx = 0;
+                self.list_state.select(None);
+            }
             self.preview_scroll = 0;
             return;
         }
@@ -637,9 +654,14 @@ impl App {
         match key.code {
             KeyCode::Esc => {
                 if self.file_manager_open {
-                    self.file_manager_open = false;
-                    self.query.clear();
-                    self.update_search();
+                    if !self.query.is_empty() {
+                        self.query.clear();
+                        self.update_search();
+                    } else {
+                        self.file_manager_open = false;
+                        self.query.clear();
+                        self.update_search();
+                    }
                 } else {
                     self.exit_requested = true;
                 }
@@ -681,8 +703,8 @@ impl App {
             KeyCode::Char('j') if key.modifiers.contains(KeyModifiers::ALT) => {
                 self.preview_scroll = self.preview_scroll.saturating_add(1);
             }
-            // Navigate results list using Arrow keys
-            KeyCode::Up => {
+            // Navigate results list using Arrow keys or Vim j/k (in file manager list)
+            KeyCode::Up | KeyCode::Char('k') if key.code == KeyCode::Up || (self.file_manager_open && self.file_manager.get_focus_pane() == 1 && !key.modifiers.contains(KeyModifiers::ALT) && !key.modifiers.contains(KeyModifiers::CONTROL)) => {
                 if !self.results.is_empty() {
                     if self.selected_idx == 0 {
                         self.selected_idx = self.results.len() - 1;
@@ -693,7 +715,7 @@ impl App {
                     self.preview_scroll = 0;
                 }
             }
-            KeyCode::Down => {
+            KeyCode::Down | KeyCode::Char('j') if key.code == KeyCode::Down || (self.file_manager_open && self.file_manager.get_focus_pane() == 1 && !key.modifiers.contains(KeyModifiers::ALT) && !key.modifiers.contains(KeyModifiers::CONTROL)) => {
                 if !self.results.is_empty() {
                     self.selected_idx = (self.selected_idx + 1) % self.results.len();
                     self.list_state.select(Some(self.selected_idx));
