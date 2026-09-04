@@ -50,22 +50,35 @@
  
  ## 📁 File Manager Dashboard `F2`
  
- Press **`F2`** to trigger the responsive dual-pane file browser. Focus cycle: Sidebar ➔ Files ➔ Path Bar ➔ Search Query.
+ Press **`F2`** to trigger the responsive multi-pane file browser. Focus cycle: Sidebar ➔ Files ➔ Path Bar ➔ Search Query.
  
- ### 📱 Responsive Layout
+ ### 📱 Responsive Layout & Live Preview
+ - **3-Column Wide Layout (≥ 90 columns)**: Automatically unfolds the third `Live Preview` column with real-time text/code syntax previews, half-block graphics for images (PNG/JPG/GIF/WebP), directory contents summaries, and filesystem metadata.
+ - **Preview Toggle**: Press `p` or `Alt-p` at any time to expand or collapse the live preview pane, easily switching between 2-column and 3-column views.
  - **Narrow (< 55 columns)**: Displays only `Name` and `Size`.
  - **Medium (55–75 columns)**: Displays `Name`, `Size`, and `Modified` time.
  - **Wide (> 75 columns)**: Displays `Name`, `Size`, `Permissions` and `Modified` time.
+ 
+ ### 📊 Multi-Mode Sorting System
+ Column headers display live dynamic sort direction indicators (`▲` Ascending / `▼` Descending):
+ - Press `s` or `Alt-s` to cycle sorting criteria: **Name ➔ Modified Time ➔ Size ➔ Extension**.
+ - Press `S` (Shift-S) or `Alt-S` to quickly invert sort direction (Ascending ⇄ Descending).
  
  ### ⌨️ Keyboard Actions (Global inside File Manager)
  | Key | Action |
  | :--- | :--- |
  | `Tab` / `Shift-Tab` | Cycle focus between panes (Sidebar ➔ Files ➔ Path ➔ Search) |
+ | `p` / `Alt-p` | Toggle Live Preview sidebar on/off |
+ | `s` / `Alt-s` | Cycle sort mode (Name, Modified, Size, Extension) |
+ | `S` / `Alt-S` | Toggle sort order (Ascending ▲ ⇄ Descending ▼) |
+ | `y` / `Alt-y` | Copy **absolute path** of selected item to system clipboard |
+ | `Y` | Copy **filename** of selected item to system clipboard |
  | `Backspace` | Navigate to parent directory (or exit virtual history views) |
- | `m` / `M` | Open/close floating Context Menu Overlay |
+ | `m` / `M` | Open/close 12-item Context Menu Overlay |
  | `Alt-c` / `Alt-x` | Copy / Cut selected file (Cut files are displayed as dimmed) |
  | `Alt-v` | Paste file from clipboard (Conflicts auto-resolved with numerical suffixes) |
- | `Alt-d` / `Delete` | Open secure Delete Confirmation dialog overlay |
+ | `Delete` / `Alt-d` | Safely move file/directory to Trash (FreeDesktop.org spec) |
+ | `Shift-Delete` | Permanently delete file/directory with warning confirmation |
  | `Alt-r` | Rename file/folder (opens interactive pre-populated Input Dialog overlay) |
  | `Alt-n` / `Alt-f` | Create new folder / file (opens interactive Input Dialog overlay) |
  | `Alt-h` | Toggle showing hidden files starting with `.` |
