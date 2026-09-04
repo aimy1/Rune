@@ -841,14 +841,29 @@ pub fn draw_app(
             frame.set_cursor(cursor_x, cursor_y);
         }
 
-        // 2. Split Main Workspace into Sidebar and Files list
-        let main_columns = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Length(24), Constraint::Min(20)])
-            .split(main_area);
+        // 2. Split Main Workspace into Sidebar, Files list, and optional Live Preview
+        let preview_visible = first_res
+            .and_then(|r| r.metadata.get("preview_visible").map(|s| s == "true"))
+            .unwrap_or(true);
 
-        let sidebar_area = main_columns[0];
-        let files_area = main_columns[1];
+        let (sidebar_area, files_area, preview_area) = if preview_visible && main_area.width >= 90 {
+            let preview_width = (main_area.width.saturating_sub(24) * 44 / 100).max(32);
+            let main_columns = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([
+                    Constraint::Length(24),
+                    Constraint::Min(35),
+                    Constraint::Length(preview_width),
+                ])
+                .split(main_area);
+            (main_columns[0], main_columns[1], Some(main_columns[2]))
+        } else {
+            let main_columns = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Length(24), Constraint::Min(20)])
+                .split(main_area);
+            (main_columns[0], main_columns[1], None)
+        };
 
         let fav_area = sidebar_area;
 
@@ -996,11 +1011,31 @@ pub fn draw_app(
             width.saturating_sub(6 + size_w)
         };
 
+        let sort_by = first_res.and_then(|r| r.metadata.get("sort_by").map(|s| s.as_str())).unwrap_or("Name");
+        let sort_order = first_res.and_then(|r| r.metadata.get("sort_order").map(|s| s.as_str())).unwrap_or("Asc");
+        let sort_arrow = if sort_order == "Asc" { " ▲" } else { " ▼" };
+
+        let name_header = match sort_by {
+            "Name" => format!("{}{}", if is_zh { "名称" } else { "Name" }, sort_arrow),
+            "Extension" => format!("{}{}", if is_zh { "名称(后缀)" } else { "Name(Ext)" }, sort_arrow),
+            _ => if is_zh { "名称".to_string() } else { "Name".to_string() },
+        };
+        let size_header = if sort_by == "Size" {
+            format!("{}{}", if is_zh { "大小" } else { "Size" }, sort_arrow)
+        } else {
+            if is_zh { "大小".to_string() } else { "Size".to_string() }
+        };
+        let mod_header = if sort_by == "Modified" {
+            format!("{}{}", if is_zh { "修改时间" } else { "Modified" }, sort_arrow)
+        } else {
+            if is_zh { "修改时间".to_string() } else { "Modified".to_string() }
+        };
+
         let mut header_spans = vec![
             Span::raw("   "), // Align headers with item prefix inside borders
-            Span::styled(format!("{:<width$}", if is_zh { "名称" } else { "Name" }, width = name_w), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
+            Span::styled(format!("{:<width$}", name_header, width = name_w), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
             Span::raw("  "),
-            Span::styled(format!("{:>width$}", if is_zh { "大小" } else { "Size" }, width = size_w), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
+            Span::styled(format!("{:>width$}", size_header, width = size_w), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
         ];
 
         if show_perm {
@@ -1010,7 +1045,7 @@ pub fn draw_app(
 
         if show_mod {
             header_spans.push(Span::raw("  "));
-            header_spans.push(Span::styled(format!("{:>width$}", if is_zh { "修改时间" } else { "Modified" }, width = mod_w), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)));
+            header_spans.push(Span::styled(format!("{:>width$}", mod_header, width = mod_w), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)));
         }
 
         let header_p = Paragraph::new(Line::from(header_spans));
@@ -1126,6 +1161,70 @@ pub fn draw_app(
             frame.render_stateful_widget(list_widget, list_area, list_state);
         }
 
+        // --- Render Live Preview Pane (if 3-column layout active) ---
+        if let Some(p_area) = preview_area {
+            let title_str = if is_zh {
+                if preview_scroll > 0 {
+                    format!(" 实时预览 [第 {} 行] (p:关闭) ", preview_scroll)
+                } else {
+                    " 实时预览 (p:关闭) ".to_string()
+                }
+            } else {
+                if preview_scroll > 0 {
+                    format!(" Live Preview [Row {}] (p:toggle) ", preview_scroll)
+                } else {
+                    " Live Preview (p:toggle) ".to_string()
+                }
+            };
+
+            let preview_block = Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(theme.border))
+                .title(Span::styled(title_str, Style::default().fg(theme.border)));
+
+            if let Some(ref text) = preview_content {
+                let mut lines = Vec::new();
+                let mut in_code_block = false;
+                let img_w = (p_area.width.saturating_sub(4) as u32).min(50);
+                let img_h = (p_area.height.saturating_sub(4) as u32).min(18);
+
+                for line in text.lines() {
+                    if line.starts_with("[IMAGE: ") && line.ends_with(']') {
+                        let path_str = &line[8..line.len() - 1];
+                        lines.extend(draw_image_in_preview(path_str, theme, img_w, img_h));
+                        continue;
+                    }
+                    if line.trim().starts_with("```") {
+                        in_code_block = !in_code_block;
+                        continue;
+                    }
+                    if in_code_block {
+                        lines.push(Line::from(Span::styled(
+                            line.to_string(),
+                            Style::default().fg(theme.success),
+                        )));
+                    } else {
+                        lines.push(parse_markdown_line(line, theme));
+                    }
+                }
+
+                let preview_p = Paragraph::new(lines)
+                    .block(preview_block)
+                    .scroll((preview_scroll, 0))
+                    .style(Style::default().bg(theme.background));
+
+                frame.render_widget(preview_p, p_area);
+            } else {
+                let empty_preview_p = Paragraph::new(Line::from(Span::styled(
+                    if is_zh { "\n\n\n   (暂无预览内容)" } else { "\n\n\n   (No preview available)" },
+                    Style::default().fg(theme.border).add_modifier(Modifier::DIM),
+                )))
+                .block(preview_block)
+                .style(Style::default().bg(theme.background));
+                frame.render_widget(empty_preview_p, p_area);
+            }
+        }
+
         // --- Render Footer ---
         let total_dirs = first_res.and_then(|r| r.metadata.get("total_dirs").map(|s| s.as_str())).unwrap_or("0");
         let total_files = first_res.and_then(|r| r.metadata.get("total_files").map(|s| s.as_str())).unwrap_or("0");
@@ -1156,9 +1255,9 @@ pub fn draw_app(
         };
 
         let cheatsheet_text = if is_zh {
-            " ⌨️ F2:关闭 | m:操作菜单 | Alt-H:显示隐藏 | ←/→:焦点 | Alt-N:建文件夹 | Alt-F:建文件 | Del:删除 | F4:终端 "
+            " ⌨️ s:排序 | p:预览 | y:复制路径 | m:菜单 | Del:回收站 | Alt-N:文件夹 | Alt-F:文件 | F4:终端 "
         } else {
-            " ⌨️ F2:Close | m:Menu | Alt-H:Hidden | ←/→:Focus | Alt-N:Dir | Alt-F:File | Del:Delete | F4:Terminal "
+            " ⌨️ s:Sort | p:Preview | y:Copy Path | m:Menu | Del:Trash | Alt-N:Dir | Alt-F:File | F4:Terminal "
         };
 
         let footer_p = Paragraph::new(Line::from(vec![
@@ -1180,13 +1279,15 @@ pub fn draw_app(
 
             let menu_options = vec![
                 if is_zh { "▶ 打开 (Enter)" } else { "▶ Open (Enter)" },
-                if is_zh { "📋 复制 (Copy)" } else { "📋 Copy" },
-                if is_zh { "✂️ 剪切 (Cut)" } else { "✂️ Cut" },
-                if is_zh { "📥 粘贴 (Paste)" } else { "📥 Paste" },
+                if is_zh { "📋 复制文件 (Copy)" } else { "📋 Copy File" },
+                if is_zh { "✂️ 剪切文件 (Cut)" } else { "✂️ Cut File" },
+                if is_zh { "📥 粘贴文件 (Paste)" } else { "📥 Paste File" },
+                if is_zh { "🔗 复制绝对路径 (Copy Path) [y]" } else { "🔗 Copy Path [y]" },
                 if is_zh { "✏️ 重命名 (Rename)" } else { "✏️ Rename" },
-                if is_zh { "🗑️ 删除 (Delete)" } else { "🗑️ Delete" },
+                if is_zh { "🗑️ 移至回收站 (Trash) [Del]" } else { "🗑️ Move to Trash [Del]" },
                 if is_zh { "📄 新建文件 (New File)" } else { "📄 New File" },
                 if is_zh { "📁 新建文件夹 (New Dir)" } else { "📁 New Folder" },
+                if is_zh { "👁️ 切换预览 (Preview) [p]" } else { "👁️ Toggle Preview [p]" },
                 if is_zh { "ℹ️ 属性 (Properties)" } else { "ℹ️ Properties" },
                 if is_zh { "❌ 取消 (Cancel)" } else { "❌ Cancel" },
             ];
@@ -1223,7 +1324,7 @@ pub fn draw_app(
                     let is_hovered = idx == context_menu_selected_idx;
                     let is_disabled = match idx {
                         0 => !has_selection,
-                        1 | 2 | 4 | 5 | 8 => !has_valid_selection,
+                        1 | 2 | 4 | 5 | 6 | 10 => !has_valid_selection,
                         _ => false,
                     };
                     
@@ -1250,7 +1351,7 @@ pub fn draw_app(
                 .collect();
             let opt_list = List::new(opt_items).block(menu_block).style(Style::default().bg(theme.background));
             
-            let popup_area = fixed_centered_rect(32, 12, area);
+            let popup_area = fixed_centered_rect(34, 14, area);
             frame.render_widget(Clear, popup_area); // clear underneath
             frame.render_widget(opt_list, popup_area);
         }
@@ -1383,22 +1484,37 @@ pub fn draw_app(
             let delete_confirm_selected_idx = first_res
                 .and_then(|r| r.metadata.get("delete_confirm_selected_idx").and_then(|s| s.parse::<usize>().ok()))
                 .unwrap_or(0);
+            let is_permanent = first_res
+                .and_then(|r| r.metadata.get("delete_is_permanent").map(|s| s == "true"))
+                .unwrap_or(false);
 
             let filename = std::path::Path::new(&item_id)
                 .file_name()
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_default();
 
-            let confirm_title = if is_zh { " 确认删除 " } else { " Confirm Delete " };
+            let confirm_title = if is_permanent {
+                if is_zh { " 确认永久删除 " } else { " Confirm Permanent Delete " }
+            } else {
+                if is_zh { " 移至回收站 " } else { " Move to Trash " }
+            };
             let popup_block = Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(theme.error).add_modifier(Modifier::BOLD))
                 .title(confirm_title);
 
-            let question = if is_zh {
-                format!("您确定要永久删除 '{}' 吗？", filename)
+            let question = if is_permanent {
+                if is_zh {
+                    format!("您确定要永久删除 '{}' 吗？", filename)
+                } else {
+                    format!("Are you sure you want to permanently delete '{}'?", filename)
+                }
             } else {
-                format!("Are you sure you want to permanently delete '{}'?", filename)
+                if is_zh {
+                    format!("您确定要将 '{}' 移至回收站吗？", filename)
+                } else {
+                    format!("Are you sure you want to move '{}' to trash?", filename)
+                }
             };
 
             let btn_no_style = if delete_confirm_selected_idx == 0 {
