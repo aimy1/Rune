@@ -21,6 +21,31 @@ pub enum ClipboardOp {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SortBy {
+    Name,
+    Modified,
+    Size,
+    Extension,
+}
+
+impl SortBy {
+    pub fn next(&self) -> Self {
+        match self {
+            SortBy::Name => SortBy::Modified,
+            SortBy::Modified => SortBy::Size,
+            SortBy::Size => SortBy::Extension,
+            SortBy::Extension => SortBy::Name,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SortOrder {
+    Ascending,
+    Descending,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputDialogAction {
     Rename,
     NewFile,
@@ -38,6 +63,9 @@ pub struct FileManagerPlugin {
     context_menu_open: RwLock<bool>,
     context_menu_selected_idx: RwLock<usize>,
     show_hidden: RwLock<bool>,
+    sort_by: RwLock<SortBy>,
+    sort_order: RwLock<SortOrder>,
+    preview_visible: RwLock<bool>,
     input_dialog_open: RwLock<bool>,
     input_dialog_title: RwLock<String>,
     input_dialog_buffer: RwLock<String>,
@@ -47,6 +75,7 @@ pub struct FileManagerPlugin {
     delete_confirm_open: RwLock<bool>,
     delete_confirm_item_id: RwLock<String>,
     delete_confirm_selected_idx: RwLock<usize>, // 0: No, 1: Yes
+    delete_is_permanent: RwLock<bool>,
 }
 
 impl FileManagerPlugin {
@@ -79,6 +108,9 @@ impl FileManagerPlugin {
             context_menu_open: RwLock::new(false),
             context_menu_selected_idx: RwLock::new(0),
             show_hidden: RwLock::new(show_hidden),
+            sort_by: RwLock::new(SortBy::Name),
+            sort_order: RwLock::new(SortOrder::Ascending),
+            preview_visible: RwLock::new(true),
             input_dialog_open: RwLock::new(false),
             input_dialog_title: RwLock::new(String::new()),
             input_dialog_buffer: RwLock::new(String::new()),
@@ -88,6 +120,7 @@ impl FileManagerPlugin {
             delete_confirm_open: RwLock::new(false),
             delete_confirm_item_id: RwLock::new(String::new()),
             delete_confirm_selected_idx: RwLock::new(0),
+            delete_is_permanent: RwLock::new(false),
         }
     }
 
@@ -266,6 +299,52 @@ fn paste_item(src: &Path, dst: &Path, op: ClipboardOp) -> std::io::Result<()> {
     Ok(())
 }
 
+fn move_to_trash(path: &Path) -> std::io::Result<()> {
+    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/home/fd"));
+    let trash_dir = home.join(".local/share/Trash");
+    let files_dir = trash_dir.join("files");
+    let info_dir = trash_dir.join("info");
+    fs::create_dir_all(&files_dir)?;
+    fs::create_dir_all(&info_dir)?;
+
+    let original_filename = path.file_name().unwrap_or_default();
+    let mut target_file = files_dir.join(original_filename);
+    let mut counter = 1;
+    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("file");
+    let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+    while target_file.exists() {
+        let new_name = if ext.is_empty() {
+            format!("{}_{}", stem, counter)
+        } else {
+            format!("{}_{}.{}", stem, counter, ext)
+        };
+        target_file = files_dir.join(new_name);
+        counter += 1;
+    }
+
+    let trash_file_name = target_file.file_name().unwrap().to_string_lossy();
+    let info_file = info_dir.join(format!("{}.trashinfo", trash_file_name));
+    let now = chrono::Local::now().format("%Y-%m-%dT%H:%M:%S");
+    let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    let trashinfo_content = format!(
+        "[Trash Info]\nPath={}\nDeletionDate={}\n",
+        canonical.to_string_lossy(),
+        now
+    );
+    let _ = fs::write(&info_file, trashinfo_content);
+
+    if fs::rename(path, &target_file).is_err() {
+        if path.is_dir() {
+            copy_dir_all(path, &target_file)?;
+            fs::remove_dir_all(path)?;
+        } else {
+            fs::copy(path, &target_file)?;
+            fs::remove_file(path)?;
+        }
+    }
+    Ok(())
+}
+
 fn get_disk_space_info(dir: &Path) -> Option<(String, String, String)> {
     let output = std::process::Command::new("df")
         .arg("-h")
@@ -430,6 +509,12 @@ impl Plugin for FileManagerPlugin {
 
                 if let Some(score) = score {
                     let meta = fs::metadata(&path).ok();
+                    let size_bytes = if is_dir { 0u64 } else { meta.as_ref().map(|m| m.len()).unwrap_or(0) };
+                    let modified_secs = meta.as_ref().and_then(|m| m.modified().ok())
+                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                        .map(|d| d.as_secs())
+                        .unwrap_or(0);
+                    let ext_str = path.extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
                     let size_str = if is_dir {
                         "DIR".to_string()
                     } else {
@@ -454,7 +539,10 @@ impl Plugin for FileManagerPlugin {
                     metadata.insert("name".to_string(), filename.clone());
                     metadata.insert("icon".to_string(), icon.to_string());
                     metadata.insert("size".to_string(), size_str);
+                    metadata.insert("size_bytes".to_string(), size_bytes.to_string());
                     metadata.insert("modified".to_string(), modified_str);
+                    metadata.insert("modified_secs".to_string(), modified_secs.to_string());
+                    metadata.insert("extension".to_string(), ext_str);
                     metadata.insert("permissions".to_string(), permissions_str);
                     metadata.insert("owner".to_string(), owner_str);
 
@@ -529,6 +617,12 @@ impl Plugin for FileManagerPlugin {
 
                     if let Some(score) = score {
                         let meta = entry.metadata().ok();
+                        let size_bytes = if is_dir { 0u64 } else { meta.as_ref().map(|m| m.len()).unwrap_or(0) };
+                        let modified_secs = meta.as_ref().and_then(|m| m.modified().ok())
+                            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                            .map(|d| d.as_secs())
+                            .unwrap_or(0);
+                        let ext_str = path.extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
                         let size_str = if is_dir {
                             "DIR".to_string()
                         } else {
@@ -553,7 +647,10 @@ impl Plugin for FileManagerPlugin {
                         metadata.insert("name".to_string(), filename.clone());
                         metadata.insert("icon".to_string(), icon.to_string());
                         metadata.insert("size".to_string(), size_str);
+                        metadata.insert("size_bytes".to_string(), size_bytes.to_string());
                         metadata.insert("modified".to_string(), modified_str);
+                        metadata.insert("modified_secs".to_string(), modified_secs.to_string());
+                        metadata.insert("extension".to_string(), ext_str);
                         metadata.insert("permissions".to_string(), permissions_str);
                         metadata.insert("owner".to_string(), owner_str);
 
@@ -571,9 +668,12 @@ impl Plugin for FileManagerPlugin {
         }
 
         // Sorting:
-        // If query is empty: sort directories alphabetically first, then files alphabetically.
-        // If query is not empty: sort by score descending.
+        // If query is empty: sort according to active SortBy and SortOrder, keeping directories first.
+        // If query is not empty: sort by fuzzy match score descending.
         if query.is_empty() {
+            let sort_by = self.sort_by.read().map(|s| *s).unwrap_or(SortBy::Name);
+            let sort_order = self.sort_order.read().map(|s| *s).unwrap_or(SortOrder::Ascending);
+
             results.sort_by(|a, b| {
                 let a_is_parent = a.metadata.get("is_parent").map(|s| s == "true").unwrap_or(false);
                 let b_is_parent = b.metadata.get("is_parent").map(|s| s == "true").unwrap_or(false);
@@ -589,9 +689,32 @@ impl Plugin for FileManagerPlugin {
                 let b_is_dir = b.metadata.get("is_dir").map(|s| s == "true").unwrap_or(false);
 
                 if a_is_dir != b_is_dir {
-                    b_is_dir.cmp(&a_is_dir)
+                    return b_is_dir.cmp(&a_is_dir); // Always keep directories on top
+                }
+
+                let ordering = match sort_by {
+                    SortBy::Name => a.title.to_lowercase().cmp(&b.title.to_lowercase()),
+                    SortBy::Modified => {
+                        let a_mtime = a.metadata.get("modified_secs").and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
+                        let b_mtime = b.metadata.get("modified_secs").and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
+                        a_mtime.cmp(&b_mtime)
+                    }
+                    SortBy::Size => {
+                        let a_size = a.metadata.get("size_bytes").and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
+                        let b_size = b.metadata.get("size_bytes").and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
+                        a_size.cmp(&b_size)
+                    }
+                    SortBy::Extension => {
+                        let a_ext = a.metadata.get("extension").map(|s| s.as_str()).unwrap_or("");
+                        let b_ext = b.metadata.get("extension").map(|s| s.as_str()).unwrap_or("");
+                        a_ext.cmp(b_ext).then_with(|| a.title.to_lowercase().cmp(&b.title.to_lowercase()))
+                    }
+                };
+
+                if sort_order == SortOrder::Descending {
+                    ordering.reverse()
                 } else {
-                    a.title.to_lowercase().cmp(&b.title.to_lowercase())
+                    ordering
                 }
             });
         } else {
@@ -679,8 +802,23 @@ impl Plugin for FileManagerPlugin {
         let delete_confirm_open = if let Ok(g) = self.delete_confirm_open.read() { *g } else { false };
         let delete_confirm_item_id = if let Ok(g) = self.delete_confirm_item_id.read() { g.clone() } else { String::new() };
         let delete_confirm_selected_idx = if let Ok(g) = self.delete_confirm_selected_idx.read() { *g } else { 0 };
+        let delete_is_permanent = if let Ok(g) = self.delete_is_permanent.read() { *g } else { false };
+        let sort_by_name = match self.sort_by.read().map(|s| *s).unwrap_or(SortBy::Name) {
+            SortBy::Name => "Name",
+            SortBy::Modified => "Modified",
+            SortBy::Size => "Size",
+            SortBy::Extension => "Extension",
+        };
+        let sort_order_name = match self.sort_order.read().map(|s| *s).unwrap_or(SortOrder::Ascending) {
+            SortOrder::Ascending => "Asc",
+            SortOrder::Descending => "Desc",
+        };
+        let preview_visible = self.preview_visible.read().map(|b| *b).unwrap_or(true);
 
         for item in &mut results {
+            item.metadata.insert("sort_by".to_string(), sort_by_name.to_string());
+            item.metadata.insert("sort_order".to_string(), sort_order_name.to_string());
+            item.metadata.insert("preview_visible".to_string(), preview_visible.to_string());
             item.metadata.insert("input_dialog_open".to_string(), input_dialog_open.to_string());
             item.metadata.insert("input_dialog_title".to_string(), input_dialog_title.clone());
             item.metadata.insert("input_dialog_buffer".to_string(), input_dialog_buffer.clone());
@@ -689,6 +827,7 @@ impl Plugin for FileManagerPlugin {
             item.metadata.insert("delete_confirm_open".to_string(), delete_confirm_open.to_string());
             item.metadata.insert("delete_confirm_item_id".to_string(), delete_confirm_item_id.clone());
             item.metadata.insert("delete_confirm_selected_idx".to_string(), delete_confirm_selected_idx.to_string());
+            item.metadata.insert("delete_is_permanent".to_string(), delete_is_permanent.to_string());
             item.metadata.insert("current_dir".to_string(), current_path_str.clone());
             item.metadata.insert("sidebar_focused".to_string(), sidebar_focused.to_string());
             item.metadata.insert("focus_pane".to_string(), focus_pane.to_string());
@@ -818,16 +957,19 @@ impl Plugin for FileManagerPlugin {
         }
 
         // Add visual cheatsheet
-        preview.push_str("\n---\n### ⌨️ Dolphin Keys\n");
-        preview.push_str("- **Left/Right**: Focus Sidebar / Files\n");
-        preview.push_str("- **Enter**: Open File / Enter Folder\n");
+        preview.push_str("\n---\n### ⌨️ Shortcuts\n");
+        preview.push_str("- **Enter**: Open / Enter Folder\n");
         preview.push_str("- **Backspace**: Go up Folder\n");
+        preview.push_str("- **s / S**: Cycle Sort / Toggle Asc-Desc\n");
+        preview.push_str("- **p**: Toggle Live Preview\n");
+        preview.push_str("- **y / Y**: Copy Absolute Path / Filename\n");
+        preview.push_str("- **m**: Context Menu\n");
         preview.push_str("- **Alt-c** / **Alt-x**: Copy / Cut\n");
         preview.push_str("- **Alt-v**: Paste item\n");
-        preview.push_str("- **Alt-d**: Delete item\n");
-        preview.push_str("- **Alt-r**: Rename to query\n");
+        preview.push_str("- **Del**: Move to Trash (Shift-Del: Permanent)\n");
+        preview.push_str("- **Alt-r**: Rename\n");
         preview.push_str("- **Alt-n** / **Alt-f**: New Folder/File\n");
-        preview.push_str("- **F4**: Open terminal\n");
+        preview.push_str("- **F4**: Terminal\n");
 
         if let Some((clip_path, op)) = self.clipboard.read().ok().and_then(|g| g.clone()) {
             preview.push_str(&format!(
@@ -919,21 +1061,25 @@ impl Plugin for FileManagerPlugin {
                         *open = false;
                     }
                     let item_id = if let Ok(g) = self.delete_confirm_item_id.read() { g.clone() } else { String::new() };
+                    let is_perm = self.delete_is_permanent.read().map(|b| *b).unwrap_or(false);
                     if !item_id.is_empty() {
                         let path = PathBuf::from(&item_id);
-                        let is_dir = path.is_dir();
-                        let res = if is_dir {
-                            fs::remove_dir_all(&path)
-                        } else {
-                            fs::remove_file(&path)
-                        };
-                        match res {
-                            Ok(_) => {
-                                let filename = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-                                ctx.message = Some(format!("Deleted: {}", filename));
+                        let filename = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                        if is_perm {
+                            let is_dir = path.is_dir();
+                            let res = if is_dir {
+                                fs::remove_dir_all(&path)
+                            } else {
+                                fs::remove_file(&path)
+                            };
+                            match res {
+                                Ok(_) => ctx.message = Some(format!("Permanently deleted: {}", filename)),
+                                Err(e) => ctx.message = Some(format!("Delete failed: {e}")),
                             }
-                            Err(e) => {
-                                ctx.message = Some(format!("Delete failed: {e}"));
+                        } else {
+                            match move_to_trash(&path) {
+                                Ok(_) => ctx.message = Some(format!("Moved to trash: {}", filename)),
+                                Err(e) => ctx.message = Some(format!("Failed to move to trash: {e}")),
                             }
                         }
                     }
@@ -961,21 +1107,25 @@ impl Plugin for FileManagerPlugin {
                     }
                     if confirm_idx == 1 {
                         let item_id = if let Ok(g) = self.delete_confirm_item_id.read() { g.clone() } else { String::new() };
+                        let is_perm = self.delete_is_permanent.read().map(|b| *b).unwrap_or(false);
                         if !item_id.is_empty() {
                             let path = PathBuf::from(&item_id);
-                            let is_dir = path.is_dir();
-                            let res = if is_dir {
-                                fs::remove_dir_all(&path)
-                            } else {
-                                fs::remove_file(&path)
-                            };
-                            match res {
-                                Ok(_) => {
-                                    let filename = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-                                    ctx.message = Some(format!("Deleted: {}", filename));
+                            let filename = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                            if is_perm {
+                                let is_dir = path.is_dir();
+                                let res = if is_dir {
+                                    fs::remove_dir_all(&path)
+                                } else {
+                                    fs::remove_file(&path)
+                                };
+                                match res {
+                                    Ok(_) => ctx.message = Some(format!("Permanently deleted: {}", filename)),
+                                    Err(e) => ctx.message = Some(format!("Delete failed: {e}")),
                                 }
-                                Err(e) => {
-                                    ctx.message = Some(format!("Delete failed: {e}"));
+                            } else {
+                                match move_to_trash(&path) {
+                                    Ok(_) => ctx.message = Some(format!("Moved to trash: {}", filename)),
+                                    Err(e) => ctx.message = Some(format!("Failed to move to trash: {e}")),
                                 }
                             }
                         }
@@ -1079,7 +1229,7 @@ impl Plugin for FileManagerPlugin {
         // --- 0. Context Menu Active Input Interception ---
         let menu_open = if let Ok(g) = self.context_menu_open.read() { *g } else { false };
         if menu_open {
-            let options_count = 10;
+            let options_count = 12;
             match key.code {
                 KeyCode::Up => {
                     if let Ok(mut idx) = self.context_menu_selected_idx.write() {
@@ -1198,7 +1348,22 @@ impl Plugin for FileManagerPlugin {
                                 ctx.message = Some("Clipboard is empty".to_string());
                             }
                         }
-                        4 => { // Rename
+                        4 => { // Copy Absolute Path
+                            if let Some(selected) = selected_item {
+                                if selected.id != ".." {
+                                    let path_str = selected.id.clone();
+                                    if let Ok(mut clip) = arboard::Clipboard::new() {
+                                        let _ = clip.set_text(&path_str);
+                                    }
+                                    ctx.message = Some(format!("Copied path: {}", path_str));
+                                } else {
+                                    ctx.message = Some("Cannot copy parent directory path".to_string());
+                                }
+                            } else {
+                                ctx.message = Some("No item selected to copy path".to_string());
+                            }
+                        }
+                        5 => { // Rename
                             if let Some(selected) = selected_item {
                                 if selected.id != ".." {
                                     let current_name = Path::new(&selected.id)
@@ -1224,9 +1389,12 @@ impl Plugin for FileManagerPlugin {
                                 ctx.message = Some("No item selected to rename".to_string());
                             }
                         }
-                        5 => { // Delete
+                        6 => { // Delete / Move to Trash
                             if let Some(selected) = selected_item {
                                 if selected.id != ".." {
+                                    if let Ok(mut perm) = self.delete_is_permanent.write() {
+                                        *perm = false;
+                                    }
                                     if let Ok(mut open) = self.delete_confirm_open.write() {
                                         *open = true;
                                     }
@@ -1243,7 +1411,7 @@ impl Plugin for FileManagerPlugin {
                                 ctx.message = Some("No item selected to delete".to_string());
                             }
                         }
-                        6 => { // New File
+                        7 => { // New File
                             if let Ok(mut open) = self.input_dialog_open.write() {
                                 *open = true;
                             }
@@ -1257,7 +1425,7 @@ impl Plugin for FileManagerPlugin {
                                 *action = InputDialogAction::NewFile;
                             }
                         }
-                        7 => { // New Folder
+                        8 => { // New Folder
                             if let Ok(mut open) = self.input_dialog_open.write() {
                                 *open = true;
                             }
@@ -1271,7 +1439,14 @@ impl Plugin for FileManagerPlugin {
                                 *action = InputDialogAction::NewFolder;
                             }
                         }
-                        8 => { // Properties
+                        9 => { // Toggle Preview
+                            if let Ok(mut p) = self.preview_visible.write() {
+                                *p = !*p;
+                                let state = if *p { "enabled" } else { "disabled" };
+                                ctx.message = Some(format!("Preview {}", state));
+                            }
+                        }
+                        10 => { // Properties
                             if let Some(selected) = selected_item {
                                 if selected.id != ".." {
                                     if let Ok(mut open) = self.properties_dialog_open.write() {
@@ -1287,7 +1462,7 @@ impl Plugin for FileManagerPlugin {
                                 ctx.message = Some("No item selected to view properties".to_string());
                             }
                         }
-                        9 => {} // Cancel (already closed)
+                        11 => {} // Cancel (already closed)
                         _ => {}
                     }
                     return true;
@@ -1405,6 +1580,60 @@ impl Plugin for FileManagerPlugin {
                     }
                     return true;
                 }
+                // Alt-S: Toggle sort order
+                KeyCode::Char('S') => {
+                    if let Ok(mut o) = self.sort_order.write() {
+                        *o = match *o {
+                            SortOrder::Ascending => SortOrder::Descending,
+                            SortOrder::Descending => SortOrder::Ascending,
+                        };
+                        let name = match *o {
+                            SortOrder::Ascending => "Ascending",
+                            SortOrder::Descending => "Descending",
+                        };
+                        ctx.message = Some(format!("Sort order: {}", name));
+                    }
+                    ctx.refresh_search = true;
+                    return true;
+                }
+                // Alt-s: Cycle sort mode
+                KeyCode::Char('s') => {
+                    if let Ok(mut s) = self.sort_by.write() {
+                        *s = s.next();
+                        let name = match *s {
+                            SortBy::Name => "Name",
+                            SortBy::Modified => "Modified",
+                            SortBy::Size => "Size",
+                            SortBy::Extension => "Extension",
+                        };
+                        ctx.message = Some(format!("Sort by: {}", name));
+                    }
+                    ctx.refresh_search = true;
+                    return true;
+                }
+                // Alt-P: Toggle live preview
+                KeyCode::Char('p') | KeyCode::Char('P') => {
+                    if let Ok(mut p) = self.preview_visible.write() {
+                        *p = !*p;
+                        let state = if *p { "enabled" } else { "disabled" };
+                        ctx.message = Some(format!("Preview {}", state));
+                    }
+                    ctx.refresh_search = true;
+                    return true;
+                }
+                // Alt-Y: Copy path
+                KeyCode::Char('y') | KeyCode::Char('Y') => {
+                    if let Some(selected) = selected_item {
+                        if selected.id != ".." {
+                            let path_str = selected.id.clone();
+                            if let Ok(mut clip) = arboard::Clipboard::new() {
+                                let _ = clip.set_text(&path_str);
+                            }
+                            ctx.message = Some(format!("Copied path: {}", path_str));
+                        }
+                    }
+                    return true;
+                }
                 _ => {}
             }
         }
@@ -1473,6 +1702,10 @@ impl Plugin for FileManagerPlugin {
                     }
                     KeyCode::Char('d') | KeyCode::Char('D') => {
                         if selected.id != ".." {
+                            let is_shift = key.modifiers.contains(KeyModifiers::SHIFT);
+                            if let Ok(mut perm) = self.delete_is_permanent.write() {
+                                *perm = is_shift;
+                            }
                             if let Ok(mut open) = self.delete_confirm_open.write() {
                                 *open = true;
                             }
@@ -1516,6 +1749,10 @@ impl Plugin for FileManagerPlugin {
                 }
             } else if key.code == KeyCode::Delete {
                 if selected.id != ".." {
+                    let is_shift = key.modifiers.contains(KeyModifiers::SHIFT);
+                    if let Ok(mut perm) = self.delete_is_permanent.write() {
+                        *perm = is_shift;
+                    }
                     let selected_path = PathBuf::from(&selected.id);
                     if let Ok(mut open) = self.delete_confirm_open.write() {
                         *open = true;
@@ -1698,6 +1935,69 @@ impl Plugin for FileManagerPlugin {
                     ctx.refresh_search = true;
                     return true;
                 }
+                KeyCode::Char('s') => {
+                    if let Ok(mut s) = self.sort_by.write() {
+                        *s = s.next();
+                        let name = match *s {
+                            SortBy::Name => "Name",
+                            SortBy::Modified => "Modified",
+                            SortBy::Size => "Size",
+                            SortBy::Extension => "Extension",
+                        };
+                        ctx.message = Some(format!("Sort by: {}", name));
+                    }
+                    ctx.refresh_search = true;
+                    return true;
+                }
+                KeyCode::Char('S') => {
+                    if let Ok(mut o) = self.sort_order.write() {
+                        *o = match *o {
+                            SortOrder::Ascending => SortOrder::Descending,
+                            SortOrder::Descending => SortOrder::Ascending,
+                        };
+                        let name = match *o {
+                            SortOrder::Ascending => "Ascending",
+                            SortOrder::Descending => "Descending",
+                        };
+                        ctx.message = Some(format!("Sort order: {}", name));
+                    }
+                    ctx.refresh_search = true;
+                    return true;
+                }
+                KeyCode::Char('p') | KeyCode::Char('P') => {
+                    if let Ok(mut p) = self.preview_visible.write() {
+                        *p = !*p;
+                        let state = if *p { "enabled" } else { "disabled" };
+                        ctx.message = Some(format!("Preview {}", state));
+                    }
+                    ctx.refresh_search = true;
+                    return true;
+                }
+                KeyCode::Char('y') => {
+                    if let Some(selected) = selected_item {
+                        if selected.id != ".." {
+                            let path_str = selected.id.clone();
+                            if let Ok(mut clip) = arboard::Clipboard::new() {
+                                let _ = clip.set_text(&path_str);
+                            }
+                            ctx.message = Some(format!("Copied path: {}", path_str));
+                        }
+                    }
+                    return true;
+                }
+                KeyCode::Char('Y') => {
+                    if let Some(selected) = selected_item {
+                        if selected.id != ".." {
+                            let path = PathBuf::from(&selected.id);
+                            let name = path.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+                            if let Ok(mut clip) = arboard::Clipboard::new() {
+                                let _ = clip.set_text(&name);
+                            }
+                            ctx.message = Some(format!("Copied filename: {}", name));
+                        }
+                    }
+                    return true;
+                }
                 KeyCode::Left => {
                     if let Ok(mut guard) = self.focus_pane.write() {
                         *guard = 0; // Focus Sidebar
@@ -1718,5 +2018,107 @@ impl Plugin for FileManagerPlugin {
         }
 
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn test_sort_by_next() {
+        assert_eq!(SortBy::Name.next(), SortBy::Modified);
+        assert_eq!(SortBy::Modified.next(), SortBy::Size);
+        assert_eq!(SortBy::Size.next(), SortBy::Extension);
+        assert_eq!(SortBy::Extension.next(), SortBy::Name);
+    }
+
+    #[test]
+    fn test_trash_file() {
+        let temp_dir = std::env::temp_dir().join(format!("rune_test_trash_{}", std::process::id()));
+        let _ = fs::create_dir_all(&temp_dir);
+        let test_file = temp_dir.join("test_delete_me.txt");
+        fs::write(&test_file, "Trash test content").unwrap();
+        assert!(test_file.exists());
+
+        let res = move_to_trash(&test_file);
+        assert!(res.is_ok());
+        assert!(!test_file.exists());
+
+        // Verify trash directory has the file or info
+        if let Some(trash_dir) = dirs::data_local_dir().map(|p| p.join("Trash")) {
+            let files_dir = trash_dir.join("files");
+            let info_dir = trash_dir.join("info");
+            let trashed = files_dir.join("test_delete_me.txt");
+            let trash_info = info_dir.join("test_delete_me.txt.trashinfo");
+            if trashed.exists() {
+                let _ = fs::remove_file(&trashed);
+            }
+            if trash_info.exists() {
+                let _ = fs::remove_file(&trash_info);
+            }
+        }
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_sorting_logic() {
+        let temp_dir = std::env::temp_dir().join(format!("rune_test_sort_{}", std::process::id()));
+        let _ = fs::create_dir_all(&temp_dir);
+
+        let file_a = temp_dir.join("alpha.txt");
+        let file_b = temp_dir.join("beta.rs");
+        let file_c = temp_dir.join("gamma.bin");
+
+        fs::write(&file_a, "1").unwrap();
+        fs::write(&file_b, "123456").unwrap();
+        fs::write(&file_c, "123").unwrap();
+
+        let plugin = FileManagerPlugin::new(false, &temp_dir.to_string_lossy());
+
+        // Test SortBy::Name Ascending
+        if let Ok(mut s) = plugin.sort_by.write() {
+            *s = SortBy::Name;
+        }
+        if let Ok(mut o) = plugin.sort_order.write() {
+            *o = SortOrder::Ascending;
+        }
+        let results = plugin.search("", &temp_dir);
+        let file_titles: Vec<String> = results.iter()
+            .filter(|r| r.id != ".." && r.id != "dummy_metadata_carrier")
+            .map(|r| r.title.clone())
+            .collect();
+        assert_eq!(file_titles, vec!["alpha.txt", "beta.rs", "gamma.bin"]);
+
+        // Test SortBy::Size Descending (beta.rs=6, gamma.bin=3, alpha.txt=1)
+        if let Ok(mut s) = plugin.sort_by.write() {
+            *s = SortBy::Size;
+        }
+        if let Ok(mut o) = plugin.sort_order.write() {
+            *o = SortOrder::Descending;
+        }
+        let results = plugin.search("", &temp_dir);
+        let file_titles: Vec<String> = results.iter()
+            .filter(|r| r.id != ".." && r.id != "dummy_metadata_carrier")
+            .map(|r| r.title.clone())
+            .collect();
+        assert_eq!(file_titles, vec!["beta.rs", "gamma.bin", "alpha.txt"]);
+
+        // Test SortBy::Extension Ascending (bin, rs, txt)
+        if let Ok(mut s) = plugin.sort_by.write() {
+            *s = SortBy::Extension;
+        }
+        if let Ok(mut o) = plugin.sort_order.write() {
+            *o = SortOrder::Ascending;
+        }
+        let results = plugin.search("", &temp_dir);
+        let file_titles: Vec<String> = results.iter()
+            .filter(|r| r.id != ".." && r.id != "dummy_metadata_carrier")
+            .map(|r| r.title.clone())
+            .collect();
+        assert_eq!(file_titles, vec!["gamma.bin", "beta.rs", "alpha.txt"]);
+
+        let _ = fs::remove_dir_all(&temp_dir);
     }
 }
