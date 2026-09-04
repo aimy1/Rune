@@ -442,7 +442,7 @@ fn draw_settings_screen(
             options = if is_zh {
                 vec![
                     "项目名称: Rune Launcher".to_string(),
-                    "项目版本: v0.1.0 (Rust)".to_string(),
+                    format!("项目版本: v{} (Rust)", env!("CARGO_PKG_VERSION")),
                     "核心协议: MIT License".to_string(),
                     "源码仓库: github.com/aimy1/Rune".to_string(),
                     "开发作者: aisaniya".to_string(),
@@ -450,7 +450,7 @@ fn draw_settings_screen(
             } else {
                 vec![
                     "Project: Rune Launcher".to_string(),
-                    "Version: v0.1.0 (Rust)".to_string(),
+                    format!("Version: v{} (Rust)", env!("CARGO_PKG_VERSION")),
                     "License: MIT License".to_string(),
                     "Github: github.com/aimy1/Rune".to_string(),
                     "Author: aisaniya".to_string(),
