@@ -22,6 +22,24 @@ async fn main() -> std::io::Result<()> {
 
     let args: Vec<String> = env::args().collect();
 
+    // Version flag
+    if args.iter().any(|arg| arg == "--version" || arg == "-v" || arg == "-V") {
+        println!("rune {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+
+    // Help flag
+    if args.iter().any(|arg| arg == "--help" || arg == "-h") {
+        println!("Rune v{} - High-performance TUI App Launcher & File Manager", env!("CARGO_PKG_VERSION"));
+        println!("Usage: rune [OPTIONS]");
+        println!("\nOptions:");
+        println!("  -v, --version       Print version information");
+        println!("  -h, --help          Print help information");
+        println!("  -t, --transparent   Enable terminal transparent background");
+        println!("      --daemon        Run background clipboard daemon");
+        return Ok(());
+    }
+
     // Check if running in daemon mode (for clipboard collection)
     if args.len() > 1 && (args[1] == "daemon" || args[1] == "--daemon") {
         let cache_dir = get_cache_dir();
