@@ -19,7 +19,9 @@ pub struct GeneralConfig {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ThemeConfig {
-    pub active: String, // E.g., "catppuccin", "tokyo_night", "nord", "gruvbox", "everforest", or file path
+    pub active: String, // E.g., "catppuccin", "tokyo_night", "nord", "gruvbox", "everforest", "transparent", or file path
+    #[serde(default)]
+    pub transparent: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -60,6 +62,7 @@ impl Default for Config {
             },
             theme: ThemeConfig {
                 active: "catppuccin".to_string(),
+                transparent: false,
             },
             plugins: PluginsConfig {
                 applications: true,
@@ -182,5 +185,98 @@ EOF
                 Err(_) => Config::default(),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_theme_config_default_transparent() {
+        let config = Config::default();
+        assert!(!config.theme.transparent);
+    }
+
+    #[test]
+    fn test_theme_config_deserialize_with_and_without_transparent() {
+        let toml_without_transparent = r#"
+            [general]
+            shell = "bash"
+            editor = "nano"
+            language = "zh"
+            font = "Monospace"
+
+            [theme]
+            active = "tokyo_night"
+
+            [plugins]
+            applications = true
+            files = true
+            file_manager = true
+            commands = true
+            calculator = true
+            unit_converter = true
+            ssh = true
+            clipboard = true
+            git = true
+            docker = false
+            systemd = false
+            ai = false
+            process = true
+            network = true
+            files_paths = ["~"]
+            files_ignore = []
+            files_max_depth = 4
+            ai_provider = "openai"
+            ai_api_key = ""
+            ai_model = "gpt-4o-mini"
+            ai_api_url = ""
+            file_manager_show_hidden = false
+            file_manager_start_dir = "~"
+        "#;
+        let parsed: Config = toml::from_str(toml_without_transparent).expect("parse without transparent");
+        assert_eq!(parsed.theme.active, "tokyo_night");
+        assert!(!parsed.theme.transparent);
+
+        let toml_with_transparent = r#"
+            [general]
+            shell = "bash"
+            editor = "nano"
+            language = "zh"
+            font = "Monospace"
+
+            [theme]
+            active = "catppuccin"
+            transparent = true
+
+            [plugins]
+            applications = true
+            files = true
+            file_manager = true
+            commands = true
+            calculator = true
+            unit_converter = true
+            ssh = true
+            clipboard = true
+            git = true
+            docker = false
+            systemd = false
+            ai = false
+            process = true
+            network = true
+            files_paths = ["~"]
+            files_ignore = []
+            files_max_depth = 4
+            ai_provider = "openai"
+            ai_api_key = ""
+            ai_model = "gpt-4o-mini"
+            ai_api_url = ""
+            file_manager_show_hidden = false
+            file_manager_start_dir = "~"
+        "#;
+        let parsed_trans: Config = toml::from_str(toml_with_transparent).expect("parse with transparent");
+        assert_eq!(parsed_trans.theme.active, "catppuccin");
+        assert!(parsed_trans.theme.transparent);
     }
 }

@@ -44,6 +44,7 @@
  | 🔑 | **SSH Launcher** — Parse `~/.ssh/config` and launch SSH sessions instantly |
  | 🐳 | **Docker & Systemd** — Inspect containers (with log preview) and system services; start/restart with a keystroke |
  | 🤖 | **AI Chatbot** — Real-time LLM chat; supports OpenAI, Gemini API, and local Ollama |
+ | 🪟 | **Transparent Background** — Native terminal transparency & blur support; toggle in `F1` settings, configure via `config.toml`, or start with `rune --transparent` |
  
  ---
  
@@ -79,7 +80,7 @@
  
  | Setting | Details |
  | :---: | :--- |
- | 🎨 | **Live Theme** — Cycle through Tokyo Night, Catppuccin, Nord, Gruvbox, Everforest |
+ | 🎨 | **Live Theme & Transparency** — Cycle through Tokyo Night, Catppuccin, Nord, Gruvbox, Everforest, Transparent; toggle **Transparent Background** mode on/off |
  | 🌐 | **Language** — Toggle interface between **English** and **简体中文** in real-time |
  | 📝 | **Text Editor** — Bind `nano`, `vim`, `nvim`, `hx` or any custom editor path (smart custom checkbox) |
  | 🔌 | **Plugin Toggles** — Enable/disable any of the 14 built-in plugins; tab bar rebuilds instantly |

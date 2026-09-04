@@ -292,18 +292,25 @@ fn draw_settings_screen(
     
     match settings_selected_category {
         0 => {
+            let transparent_str = if config.theme.transparent {
+                if is_zh { "透明背景 (开启)" } else { "Transparent Background (ON)" }
+            } else {
+                if is_zh { "透明背景 (关闭)" } else { "Transparent Background (OFF)" }
+            };
             options = vec![
                 "catppuccin".to_string(),
                 "tokyo_night".to_string(),
                 "nord".to_string(),
                 "gruvbox".to_string(),
                 "everforest".to_string(),
+                "transparent".to_string(),
+                transparent_str.to_string(),
             ];
             active_val = config.theme.active.clone();
             desc = if is_zh {
-                "选择主界面的着色主题。支持 Tokyo Night, Catppuccin, Nord 等配色，按 Enter 键可 live 实时切换预览。".to_string()
+                "选择主界面的着色主题，或开关透明背景支持。按 Enter 键可实时切换预览并保存。配合终端背景透明/模糊效果更佳。".to_string()
             } else {
-                "Select UI color theme. Supports Tokyo Night, Catppuccin, Nord, etc. Press Enter to live preview and switch.".to_string()
+                "Select UI color theme or toggle transparent background mode. Press Enter to live preview and switch.".to_string()
             };
         }
         1 => {
@@ -496,6 +503,12 @@ fn draw_settings_screen(
                     opt == &active_val
                 } else {
                     !["bash", "zsh", "sh"].contains(&active_val.as_str())
+                }
+            } else if settings_selected_category == 0 {
+                if idx < 6 {
+                    opt == &active_val
+                } else {
+                    config.theme.transparent
                 }
             } else if settings_selected_category == 7 {
                 if idx == 0 {

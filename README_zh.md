@@ -43,6 +43,7 @@
  | 🔑 | **SSH 快速连接** — 解析 `~/.ssh/config`，即时发起 SSH 会话 |
  | 🐳 | **Docker & Systemd 控制** — 实时查看容器（含日志预览）与系统服务状态，支持一键启动/重启 |
  | 🤖 | **内置 AI 助手** — 实时 LLM 对话；支持 OpenAI、Gemini API 与本地 Ollama 服务 |
+ | 🪟 | **原生背景透明化** — 支持终端透明通道与毛玻璃穿透；可通过 `F1` 快捷设置、`config.toml` 或 `rune --transparent` 启动 |
  
  ---
  
@@ -78,7 +79,7 @@
  
  | 设置项 | 详细说明 |
  | :---: | :--- |
- | 🎨 | **主题实时切换** — 在 Tokyo Night、Catppuccin、Nord、Gruvbox、Everforest 之间热切换 |
+ | 🎨 | **主题与透明背景** — 在 Tokyo Night、Catppuccin、Nord、Gruvbox、Everforest 与 Transparent 之间热切换，支持一键开关**透明背景模式** |
  | 🌐 | **双语界面切换** — 实时在**简体中文**与 **English** 之间切换，所有面板立即更新 |
  | 📝 | **文本编辑器绑定** — 绑定 `nano`、`vim`、`nvim`、`hx` 或自定义编辑器路径（带智能单选框逻辑） |
  | 🔌 | **插件独立开关** — 对 14 个内置插件逐一启用/禁用（包括 `file_manager` 等），标签页实时重建 |

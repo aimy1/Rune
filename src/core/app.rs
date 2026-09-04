@@ -75,7 +75,7 @@ fn scan_monospace_fonts() -> Vec<String> {
 
 impl App {
     pub fn new(config: Config, cache_dir: PathBuf) -> Self {
-        let theme_styles = ThemeStyles::from_theme(&load_theme(&config.theme.active));
+        let theme_styles = ThemeStyles::from_theme(&load_theme(&config.theme.active), config.theme.transparent);
         let plugins = load_all_plugins(&config);
         let storage = Storage::load(&cache_dir);
 
@@ -173,7 +173,7 @@ impl App {
 
     fn get_options_count(&self) -> usize {
         match self.settings_selected_category {
-            0 => 5, // TUI themes
+            0 => 7, // 6 TUI themes + 1 transparent background toggle
             1 => 2, // UI language
             2 => 5, // editor (+ custom)
             3 => 4, // Terminal Shell (bash, zsh, sh, custom)
@@ -197,12 +197,17 @@ impl App {
                     "nord".to_string(),
                     "gruvbox".to_string(),
                     "everforest".to_string(),
+                    "transparent".to_string(),
                 ];
                 if self.settings_selected_option < themes.len() {
                     let chosen = themes[self.settings_selected_option].clone();
                     self.config.theme.active = chosen;
                     // Live theme update!
-                    self.theme_styles = ThemeStyles::from_theme(&load_theme(&self.config.theme.active));
+                    self.theme_styles = ThemeStyles::from_theme(&load_theme(&self.config.theme.active), self.config.theme.transparent);
+                } else if self.settings_selected_option == themes.len() {
+                    // Toggle transparent background mode!
+                    self.config.theme.transparent = !self.config.theme.transparent;
+                    self.theme_styles = ThemeStyles::from_theme(&load_theme(&self.config.theme.active), self.config.theme.transparent);
                 }
             }
             1 => {

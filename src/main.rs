@@ -32,7 +32,10 @@ async fn main() -> std::io::Result<()> {
     }
 
     // Normal Mode: Launch TUI palette
-    let config = Config::load();
+    let mut config = Config::load();
+    if args.iter().any(|arg| arg == "--transparent" || arg == "-t") {
+        config.theme.transparent = true;
+    }
     let cache_dir = get_cache_dir();
     
     let mut app = App::new(config, cache_dir);

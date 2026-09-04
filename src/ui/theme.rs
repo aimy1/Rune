@@ -28,7 +28,15 @@ pub struct ThemeStyles {
 }
 
 fn parse_hex_color(s: &str, default: Color) -> Color {
-    let cleaned = s.trim().trim_start_matches('#');
+    let s_trimmed = s.trim();
+    if s_trimmed.eq_ignore_ascii_case("none")
+        || s_trimmed.eq_ignore_ascii_case("transparent")
+        || s_trimmed.eq_ignore_ascii_case("reset")
+        || s_trimmed.eq_ignore_ascii_case("default")
+    {
+        return Color::Reset;
+    }
+    let cleaned = s_trimmed.trim_start_matches('#');
     if cleaned.len() == 6 {
         if let (Ok(r), Ok(g), Ok(b)) = (
             u8::from_str_radix(&cleaned[0..2], 16),
@@ -45,9 +53,14 @@ fn parse_hex_color(s: &str, default: Color) -> Color {
 }
 
 impl ThemeStyles {
-    pub fn from_theme(theme: &Theme) -> Self {
+    pub fn from_theme(theme: &Theme, transparent: bool) -> Self {
+        let background = if transparent {
+            Color::Reset
+        } else {
+            parse_hex_color(&theme.background, Color::Reset)
+        };
         Self {
-            background: parse_hex_color(&theme.background, Color::Reset),
+            background,
             foreground: parse_hex_color(&theme.foreground, Color::White),
             accent: parse_hex_color(&theme.accent, Color::Blue),
             border: parse_hex_color(&theme.border, Color::DarkGray),
@@ -61,6 +74,16 @@ impl ThemeStyles {
 
 pub fn get_builtin_theme(name: &str) -> Option<Theme> {
     match name.to_lowercase().as_str() {
+        "transparent" => Some(Theme {
+            background: "transparent".to_string(),
+            foreground: "#cdd6f4".to_string(),
+            accent: "#89b4fa".to_string(),
+            border: "#585b70".to_string(),
+            selection: "#313244".to_string(),
+            warning: "#f9e2af".to_string(),
+            success: "#a6e3a1".to_string(),
+            error: "#f38ba8".to_string(),
+        }),
         "tokyo_night" | "tokyonight" => Some(Theme {
             background: "#1a1b26".to_string(),
             foreground: "#c0caf5".to_string(),
@@ -133,4 +156,36 @@ pub fn load_theme(theme_name_or_path: &str) -> Theme {
 
     // 3. Fallback to Catppuccin
     get_builtin_theme("catppuccin").unwrap()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_hex_color_transparent_keywords() {
+        assert_eq!(parse_hex_color("transparent", Color::White), Color::Reset);
+        assert_eq!(parse_hex_color("none", Color::White), Color::Reset);
+        assert_eq!(parse_hex_color("reset", Color::White), Color::Reset);
+        assert_eq!(parse_hex_color("default", Color::White), Color::Reset);
+        assert_eq!(parse_hex_color("#1e1e2e", Color::White), Color::Rgb(0x1e, 0x1e, 0x2e));
+    }
+
+    #[test]
+    fn test_theme_transparency_toggle() {
+        let theme = get_builtin_theme("catppuccin").unwrap();
+        let opaque_styles = ThemeStyles::from_theme(&theme, false);
+        assert_eq!(opaque_styles.background, Color::Rgb(0x1e, 0x1e, 0x2e));
+
+        let transparent_styles = ThemeStyles::from_theme(&theme, true);
+        assert_eq!(transparent_styles.background, Color::Reset);
+    }
+
+    #[test]
+    fn test_builtin_transparent_theme() {
+        let theme = get_builtin_theme("transparent").unwrap();
+        assert_eq!(theme.background, "transparent");
+        let styles = ThemeStyles::from_theme(&theme, false);
+        assert_eq!(styles.background, Color::Reset);
+    }
 }
