@@ -1,4 +1,3 @@
-pub mod ai;
 pub mod applications;
 pub mod calculator;
 pub mod commands;
@@ -14,7 +13,6 @@ pub mod unit_converter;
 pub mod process;
 pub mod network;
 
-pub use ai::AiPlugin;
 pub use applications::ApplicationsPlugin;
 pub use calculator::CalculatorPlugin;
 pub use commands::CommandsPlugin;
@@ -72,14 +70,6 @@ pub fn load_all_plugins(config: &Config) -> Vec<Box<dyn Plugin>> {
     }
     if config.plugins.systemd {
         plugins.push(Box::new(SystemdPlugin::new()));
-    }
-    if config.plugins.ai {
-        plugins.push(Box::new(AiPlugin::new(
-            config.plugins.ai_provider.clone(),
-            config.plugins.ai_api_key.clone(),
-            config.plugins.ai_model.clone(),
-            config.plugins.ai_api_url.clone(),
-        )));
     }
     if config.plugins.process {
         plugins.push(Box::new(ProcessPlugin::new()));
