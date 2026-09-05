@@ -37,16 +37,11 @@ pub struct PluginsConfig {
     pub git: bool,
     pub docker: bool,
     pub systemd: bool,
-    pub ai: bool,
     pub process: bool,
     pub network: bool,
     pub files_paths: Vec<String>,
     pub files_ignore: Vec<String>,
     pub files_max_depth: usize,
-    pub ai_provider: String,
-    pub ai_api_key: String,
-    pub ai_model: String,
-    pub ai_api_url: String,
     pub file_manager_show_hidden: bool,
     pub file_manager_start_dir: String,
 }
@@ -76,7 +71,6 @@ impl Default for Config {
                 git: true,
                 docker: false,
                 systemd: false,
-                ai: false,
                 process: true,
                 network: true,
                 files_paths: vec!["~".to_string()],
@@ -88,10 +82,6 @@ impl Default for Config {
                     ".cargo".to_string(),
                 ],
                 files_max_depth: 4,
-                ai_provider: "openai".to_string(),
-                ai_api_key: "".to_string(),
-                ai_model: "gpt-4o-mini".to_string(),
-                ai_api_url: "https://api.openai.com/v1".to_string(),
                 file_manager_show_hidden: false,
                 file_manager_start_dir: "~".to_string(),
             },
@@ -222,16 +212,11 @@ mod tests {
             git = true
             docker = false
             systemd = false
-            ai = false
             process = true
             network = true
             files_paths = ["~"]
             files_ignore = []
             files_max_depth = 4
-            ai_provider = "openai"
-            ai_api_key = ""
-            ai_model = "gpt-4o-mini"
-            ai_api_url = ""
             file_manager_show_hidden = false
             file_manager_start_dir = "~"
         "#;
@@ -262,16 +247,11 @@ mod tests {
             git = true
             docker = false
             systemd = false
-            ai = false
             process = true
             network = true
             files_paths = ["~"]
             files_ignore = []
             files_max_depth = 4
-            ai_provider = "openai"
-            ai_api_key = ""
-            ai_model = "gpt-4o-mini"
-            ai_api_url = ""
             file_manager_show_hidden = false
             file_manager_start_dir = "~"
         "#;
