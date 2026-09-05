@@ -218,9 +218,7 @@ fn draw_settings_screen(
             "6. 插件管理 (Active Plugins)",
             "7. 文件搜索设置 (File Search)",
             "8. 文件管理器设置 (File Manager)",
-            "9. AI 提供商 (AI Provider)",
-            "10. AI 参数配置 (AI Credentials)",
-            "11. 关于项目 (About Rune)",
+            "9. 关于项目 (About Rune)",
         ]
     } else {
         vec![
@@ -232,9 +230,7 @@ fn draw_settings_screen(
             "6. Active Plugins",
             "7. File Search Settings",
             "8. File Manager Settings",
-            "9. AI Provider",
-            "10. AI Credentials",
-            "11. About Rune",
+            "9. About Rune",
         ]
     };
 
@@ -373,7 +369,6 @@ fn draw_settings_screen(
                 "git".to_string(),
                 "docker".to_string(),
                 "systemd".to_string(),
-                "ai".to_string(),
                 "process".to_string(),
                 "network".to_string(),
             ];
@@ -412,33 +407,6 @@ fn draw_settings_screen(
             };
         }
         8 => {
-            options = vec!["openai".to_string(), "gemini".to_string(), "ollama".to_string()];
-            active_val = config.plugins.ai_provider.clone();
-            desc = if is_zh {
-                "选择用于 AI 助手插件的底层服务模型提供商。可在 config.toml 中配置对应的 API Key。".to_string()
-            } else {
-                "Select AI model provider used by the AI chatbot plugin. Make sure to configure the API key in config.toml.".to_string()
-            };
-        }
-        9 => {
-            let masked_key = if config.plugins.ai_api_key.is_empty() {
-                "[Not Set]".to_string()
-            } else {
-                let key_len = config.plugins.ai_api_key.len();
-                format!("{}...", &config.plugins.ai_api_key[..std::cmp::min(5, key_len)])
-            };
-            options = vec![
-                format!("API Key: {}", masked_key),
-                format!("Model: {}", config.plugins.ai_model),
-                format!("API URL: {}", config.plugins.ai_api_url),
-            ];
-            desc = if is_zh {
-                "配置 AI 助手的连接参数。选中选项按 Enter 键进入下方文本输入框进行编辑。".to_string()
-            } else {
-                "Configure AI chatbot credentials. Select any item and press Enter to edit in the text prompt below.".to_string()
-            };
-        }
-        10 => {
             options = if is_zh {
                 vec![
                     "项目名称: Rune Launcher".to_string(),
@@ -457,9 +425,9 @@ fn draw_settings_screen(
                 ]
             };
             desc = if is_zh {
-                "Rune 是一款基于 Rust 编写的高性能 TUI 应用启动器与命令面板。支持模糊搜索，内置计算器、插件扩展、AI 聊天及配置管理。".to_string()
+                "Rune 是一款基于 Rust 编写的高性能 TUI 应用启动器、文件管理器与命令面板。支持模糊搜索，内置计算器、插件扩展及配置管理。".to_string()
             } else {
-                "Rune is a high-performance, fuzzy-search terminal launcher and command palette. Featuring calculators, clipboard managers, systemd monitoring, and built-in AI chatbots.".to_string()
+                "Rune is a high-performance, fuzzy-search terminal launcher, file manager, and command palette. Featuring calculators, clipboard managers, and systemd monitoring.".to_string()
             };
         }
         _ => {}
@@ -485,12 +453,11 @@ fn draw_settings_screen(
                     "git" => config.plugins.git,
                     "docker" => config.plugins.docker,
                     "systemd" => config.plugins.systemd,
-                    "ai" => config.plugins.ai,
                     "process" => config.plugins.process,
                     "network" => config.plugins.network,
                     _ => false,
                 }
-            } else if settings_selected_category == 6 || settings_selected_category == 10 {
+            } else if settings_selected_category == 6 || settings_selected_category == 8 {
                 false
             } else if settings_selected_category == 2 {
                 if idx < 4 {
