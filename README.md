@@ -27,7 +27,7 @@
  
  ## 📖 Overview
  
- Rune is a modern, lightweight, keyboard-driven **TUI launcher** for Linux. It serves as a central command entry point — launch apps, browse files, run shell commands, query AI, manage services, and browse clipboard history, all without leaving your terminal.
+ Rune is a modern, lightweight, keyboard-driven **TUI launcher** for Linux. It serves as a central command entry point — launch apps, browse files, run shell commands, manage services, and browse clipboard history, all without leaving your terminal.
  
  ---
  
@@ -43,7 +43,6 @@
  | 🧮 | **Calculator & Unit Converter** — Evaluate expressions; convert mass, temperature, length (4 decimal places) |
  | 🔑 | **SSH Launcher** — Parse `~/.ssh/config` and launch SSH sessions instantly |
  | 🐳 | **Docker & Systemd** — Inspect containers (with log preview) and system services; start/restart with a keystroke |
- | 🤖 | **AI Chatbot** — Real-time LLM chat; supports OpenAI, Gemini API, and local Ollama |
  | 🪟 | **Transparent Background** — Native terminal transparency & blur support; toggle in `F1` settings, configure via `config.toml`, or start with `rune --transparent` |
  
  ---
@@ -96,9 +95,7 @@
  | 🎨 | **Live Theme & Transparency** — Cycle through Tokyo Night, Catppuccin, Nord, Gruvbox, Everforest, Transparent; toggle **Transparent Background** mode on/off |
  | 🌐 | **Language** — Toggle interface between **English** and **简体中文** in real-time |
  | 📝 | **Text Editor** — Bind `nano`, `vim`, `nvim`, `hx` or any custom editor path (smart custom checkbox) |
- | 🔌 | **Plugin Toggles** — Enable/disable any of the 14 built-in plugins; tab bar rebuilds instantly |
- | 🤖 | **AI Provider** — Switch between `openai`, `gemini`, `ollama`; endpoints & models auto-populate |
- | 🔑 | **Credentials Editor** — Inline-edit API keys, models, and endpoint URLs in the status bar (masked) |
+ | 🔌 | **Plugin Toggles** — Enable/disable any of the 13 built-in plugins; tab bar rebuilds instantly |
  | 📂 | **File Search Depth** — Set directory traversal depth (2–6 levels); cache auto-flushes on save |
  | ℹ️ | **About** — Version, license, GitHub repo, and author credits (focus restricted to category list) |
  
@@ -182,7 +179,7 @@
  ├── ui/
  │   ├── draw.rs      # TUI layout & rendering (ratatui)
  │   └── theme.rs     # Theme loading & palette system
- ├── plugins/         # Built-in plugin registry (Apps, Docker, AI, etc.)
+ ├── plugins/         # Built-in plugin registry (Apps, Docker, Files, etc.)
  ├── search/          # Fuzzy match scoring engine
  └── storage/         # Cache manager & frecency scoring
  ```
