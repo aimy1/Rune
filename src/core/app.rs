@@ -13,6 +13,43 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::time::{Duration, Instant};
 
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
+
+#[cfg(unix)]
+extern "C" {
+    fn setsid() -> i32;
+    fn signal(sig: i32, handler: usize) -> usize;
+}
+
+#[cfg(unix)]
+const SIGHUP: i32 = 1;
+#[cfg(unix)]
+const SIG_IGN: usize = 1;
+
+/// Spawns a command completely detached from Rune and the controlling terminal.
+/// Sets stdio to null, creates a new session (setsid), and ignores SIGHUP
+/// so closing Rune or its terminal window will never terminate the child process.
+fn spawn_detached(shell: &str, full_cmd: &str) {
+    let mut cmd = Command::new(shell);
+    cmd.arg("-c")
+        .arg(format!("{} &", full_cmd))
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+
+    #[cfg(unix)]
+    unsafe {
+        cmd.pre_exec(|| {
+            setsid();
+            signal(SIGHUP, SIG_IGN);
+            Ok(())
+        });
+    }
+
+    let _ = cmd.spawn();
+}
+
 pub struct App {
     config: Config,
     theme_styles: ThemeStyles,
@@ -534,6 +571,9 @@ impl App {
                 if ctx.exit_requested {
                     if let Some((cmd, args, in_term)) = ctx.command_to_run {
                         self.command_to_run = Some((cmd, args, in_term));
+                        if !(self.file_manager_open && in_term) {
+                            self.exit_requested = true;
+                        }
                     } else {
                         self.exit_requested = true;
                     }
@@ -568,6 +608,9 @@ impl App {
                 if ctx.exit_requested {
                     if let Some((cmd, args, in_term)) = ctx.command_to_run {
                         self.command_to_run = Some((cmd, args, in_term));
+                        if !(self.file_manager_open && in_term) {
+                            self.exit_requested = true;
+                        }
                     } else {
                         self.exit_requested = true;
                     }
@@ -715,12 +758,16 @@ impl App {
                             ExecutionResult::Exit => {
                                 if let Some((cmd, args, in_term)) = ctx.command_to_run {
                                     self.command_to_run = Some((cmd, args, in_term));
+                                    if !(self.file_manager_open && in_term) {
+                                        self.exit_requested = true;
+                                    }
                                 } else {
                                     self.exit_requested = true;
                                 }
                             }
                             ExecutionResult::HideAndRun(cmd, args, in_term) => {
                                 self.command_to_run = Some((cmd, args, in_term));
+                                self.exit_requested = true;
                             }
                             ExecutionResult::Success => {
                                 // Keep open
@@ -851,12 +898,7 @@ impl App {
                         terminal.clear()?;
                     } else {
                         // Run background detached command
-                        let _ = Command::new(&self.config.general.shell)
-                            .arg("-c")
-                            .arg(format!("{} &", full_cmd))
-                            .stdout(std::process::Stdio::null())
-                            .stderr(std::process::Stdio::null())
-                            .spawn();
+                        spawn_detached(&self.config.general.shell, &full_cmd);
                         let msg = format!("Launched: {}", full_cmd);
                         self.status_msg = Some((msg, Instant::now()));
                     }
@@ -898,15 +940,32 @@ impl App {
                     format!("{} {}", cmd, args.join(" "))
                 };
 
-                let _ = Command::new(&self.config.general.shell)
-                    .arg("-c")
-                    .arg(format!("{} &", full_cmd))
-                    .stdout(std::process::Stdio::null())
-                    .stderr(std::process::Stdio::null())
-                    .spawn();
+                spawn_detached(&self.config.general.shell, &full_cmd);
             }
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[cfg(unix)]
+    fn test_spawn_detached_execution() {
+        use std::fs;
+        let test_file = std::env::temp_dir().join(format!("rune_detached_test_{}", std::process::id()));
+        if test_file.exists() {
+            let _ = fs::remove_file(&test_file);
+        }
+        let cmd = format!("touch {}", test_file.to_string_lossy());
+        spawn_detached("sh", &cmd);
+
+        // Wait a short moment for the background detached process
+        std::thread::sleep(Duration::from_millis(300));
+        assert!(test_file.exists(), "Detached command failed to execute");
+        let _ = fs::remove_file(&test_file);
     }
 }
