@@ -1,13 +1,121 @@
 use crate::config::Config;
-use crate::core::plugin::SearchResult;
+use crate::core::plugin::{Plugin, SearchResult};
 use crate::ui::ThemeStyles;
 use image::GenericImageView;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph};
+use ratatui::widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph};
 use ratatui::Frame;
 use std::path::Path;
+
+fn parse_inline_spans(text: &str, theme: &ThemeStyles) -> Vec<Span<'static>> {
+    let mut spans = Vec::new();
+    let mut last_idx = 0;
+    let mut in_code = false;
+    let chars: Vec<(usize, char)> = text.char_indices().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i].1 == '`' {
+            let char_pos = chars[i].0;
+            if in_code {
+                spans.push(Span::styled(
+                    text[last_idx..char_pos].to_string(),
+                    Style::default().bg(theme.selection).fg(theme.accent).add_modifier(Modifier::BOLD),
+                ));
+                in_code = false;
+                last_idx = char_pos + 1;
+            } else {
+                if char_pos > last_idx {
+                    spans.push(Span::raw(text[last_idx..char_pos].to_string()));
+                }
+                in_code = true;
+                last_idx = char_pos + 1;
+            }
+        }
+        i += 1;
+    }
+    if last_idx < text.len() {
+        let remaining = &text[last_idx..];
+        if in_code {
+            spans.push(Span::styled(
+                remaining.to_string(),
+                Style::default().bg(theme.selection).fg(theme.accent),
+            ));
+        } else {
+            spans.push(Span::raw(remaining.to_string()));
+        }
+    }
+    spans
+}
+
+pub fn get_plugin_tab_info(plugin_id: &str, is_zh: bool) -> (&'static str, &'static str, Color) {
+    match plugin_id {
+        "applications" => ("🖥️", if is_zh { "应用" } else { "Apps" }, Color::Cyan),
+        "files" => ("📄", if is_zh { "文件" } else { "Files" }, Color::Green),
+        "file_manager" => ("📁", if is_zh { "管理器" } else { "Explorer" }, Color::Blue),
+        "commands" => ("⌨️", if is_zh { "命令" } else { "Commands" }, Color::Magenta),
+        "calculator" => ("🧮", if is_zh { "计算" } else { "Calc" }, Color::Yellow),
+        "unit_converter" => ("📏", if is_zh { "换算" } else { "Units" }, Color::LightYellow),
+        "clipboard" => ("📋", if is_zh { "剪贴板" } else { "Clipboard" }, Color::LightBlue),
+        "git" => ("🌿", "Git", Color::LightGreen),
+        "docker" => ("🐳", "Docker", Color::LightCyan),
+        "systemd" => ("⚙️", if is_zh { "服务" } else { "Services" }, Color::LightRed),
+        "process" => ("📊", if is_zh { "进程" } else { "Process" }, Color::LightMagenta),
+        "network" => ("🌐", if is_zh { "网络" } else { "Network" }, Color::Rgb(100, 200, 255)),
+        "ssh" => ("🔒", "SSH", Color::Rgb(255, 180, 100)),
+        _ => ("✦", if is_zh { "插件" } else { "Plugin" }, Color::Gray),
+    }
+}
+
+fn parse_markdown_line(line: &str, theme: &ThemeStyles) -> Line<'static> {
+    let trimmed = line.trim();
+    if trimmed.starts_with("# ") {
+        Line::from(Span::styled(
+            trimmed[2..].to_string(),
+            Style::default().fg(theme.accent).add_modifier(Modifier::BOLD),
+        ))
+    } else if trimmed.starts_with("## ") {
+        Line::from(Span::styled(
+            trimmed[3..].to_string(),
+            Style::default().fg(theme.accent).add_modifier(Modifier::UNDERLINED),
+        ))
+    } else if trimmed.starts_with("### ") {
+        Line::from(Span::styled(
+            trimmed[4..].to_string(),
+            Style::default().fg(theme.foreground).add_modifier(Modifier::BOLD),
+        ))
+    } else if trimmed.starts_with("---") || trimmed.starts_with("***") {
+        Line::from(Span::styled(
+            "─".repeat(40),
+            Style::default().fg(theme.border).add_modifier(Modifier::DIM),
+        ))
+    } else if trimmed.starts_with("* ") || trimmed.starts_with("- ") {
+        let rest = trimmed[2..].trim();
+        let mut spans = vec![Span::styled("• ", Style::default().fg(theme.accent))];
+        spans.extend(parse_inline_spans(rest, theme));
+        Line::from(spans)
+    } else if trimmed.starts_with("**") {
+        if let Some(end_key) = trimmed.find("**:") {
+            let key = &trimmed[2..end_key];
+            let val = trimmed[end_key + 3..].trim_start();
+            let mut spans = vec![
+                Span::styled(format!("{key}: "), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
+            ];
+            spans.extend(parse_inline_spans(val, theme));
+            Line::from(spans)
+        } else if trimmed.ends_with("**") && trimmed.len() > 4 {
+            Line::from(Span::styled(
+                trimmed[2..trimmed.len() - 2].to_string(),
+                Style::default().fg(theme.warning).add_modifier(Modifier::BOLD),
+            ))
+        } else {
+            Line::from(parse_inline_spans(line, theme))
+        }
+    } else {
+        Line::from(parse_inline_spans(line, theme))
+    }
+}
 
 fn draw_image_in_preview(
     path_str: &str,
@@ -133,38 +241,6 @@ fn fixed_centered_rect(width: u16, height: u16, r: Rect) -> Rect {
         .split(popup_layout[1])[1]
 }
 
-fn parse_markdown_line(line: &str, theme: &ThemeStyles) -> Line<'static> {
-    let trimmed = line.trim();
-    if trimmed.starts_with("# ") {
-        Line::from(Span::styled(
-            trimmed[2..].to_string(),
-            Style::default().fg(theme.accent).add_modifier(Modifier::BOLD),
-        ))
-    } else if trimmed.starts_with("## ") {
-        Line::from(Span::styled(
-            trimmed[3..].to_string(),
-            Style::default().fg(theme.accent).add_modifier(Modifier::UNDERLINED),
-        ))
-    } else if trimmed.starts_with("### ") {
-        Line::from(Span::styled(
-            trimmed[4..].to_string(),
-            Style::default().fg(theme.foreground).add_modifier(Modifier::BOLD),
-        ))
-    } else if trimmed.starts_with('*') || trimmed.starts_with('-') {
-        let rest = trimmed[1..].trim().to_string();
-        Line::from(vec![
-            Span::styled("• ", Style::default().fg(theme.accent)),
-            Span::raw(rest),
-        ])
-    } else if trimmed.starts_with("**") && trimmed.ends_with("**") && trimmed.len() > 4 {
-        Line::from(Span::styled(
-            trimmed[2..trimmed.len() - 2].to_string(),
-            Style::default().fg(theme.warning).add_modifier(Modifier::BOLD),
-        ))
-    } else {
-        Line::from(Span::raw(line.to_string()))
-    }
-}
 
 fn draw_settings_screen(
     frame: &mut Frame,
@@ -192,6 +268,7 @@ fn draw_settings_screen(
             Style::default().fg(theme.accent).add_modifier(Modifier::BOLD),
         ))
         .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(theme.border))
         .style(Style::default().bg(theme.background).fg(theme.foreground));
 
@@ -264,6 +341,7 @@ fn draw_settings_screen(
     let cat_list = List::new(cat_items)
         .block(Block::default()
             .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
             .border_style(cat_border_style)
             .title(cat_title));
     frame.render_widget(cat_list, left_pane);
@@ -299,6 +377,8 @@ fn draw_settings_screen(
                 "nord".to_string(),
                 "gruvbox".to_string(),
                 "everforest".to_string(),
+                "dracula".to_string(),
+                "one_dark".to_string(),
                 "transparent".to_string(),
                 transparent_str.to_string(),
             ];
@@ -472,7 +552,7 @@ fn draw_settings_screen(
                     !["bash", "zsh", "sh"].contains(&active_val.as_str())
                 }
             } else if settings_selected_category == 0 {
-                if idx < 6 {
+                if idx < 8 {
                     opt == &active_val
                 } else {
                     config.theme.transparent
@@ -487,7 +567,7 @@ fn draw_settings_screen(
                 opt == &active_val
             };
             
-            let style = if settings_selected_category == 10 {
+            let style = if settings_selected_category == 8 {
                 Style::default().fg(theme.foreground)
             } else if is_focused {
                 Style::default().bg(theme.selection).fg(theme.accent).add_modifier(Modifier::BOLD)
@@ -497,21 +577,21 @@ fn draw_settings_screen(
                 Style::default().fg(theme.foreground)
             };
             
-            let prefix = if settings_selected_category == 10 {
+            let prefix = if settings_selected_category == 8 {
                 ""
             } else if is_hovered {
                 "▶ "
             } else {
                 "  "
             };
-            let checked = if settings_selected_category == 6 || settings_selected_category == 9 || settings_selected_category == 10 {
+            let checked = if settings_selected_category == 6 || settings_selected_category == 8 {
                 ""
             } else if settings_selected_category == 7 && idx == 1 {
-                "   "
-            } else if is_active {
-                " ✔ "
+                "     "
+            } else if settings_selected_category == 5 || (settings_selected_category == 7 && idx == 0) || (settings_selected_category == 0 && idx == 8) {
+                if is_active { " [✓] " } else { " [ ] " }
             } else {
-                "   "
+                if is_active { " (•) " } else { " ( ) " }
             };
             
             ListItem::new(Line::from(vec![
@@ -532,13 +612,14 @@ fn draw_settings_screen(
     let opt_list = List::new(opt_items)
         .block(Block::default()
             .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
             .border_style(opt_border_style)
             .title(opt_title));
     frame.render_widget(opt_list, opt_pane);
 
     let desc_title = if is_zh { " 配置说明 " } else { " Description " };
     let desc_p = Paragraph::new(desc)
-        .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(theme.border)).title(desc_title))
+        .block(Block::default().borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(theme.border)).title(desc_title))
         .style(Style::default().fg(theme.foreground))
         .wrap(ratatui::widgets::Wrap { trim: true });
     frame.render_widget(desc_p, desc_pane);
@@ -587,43 +668,19 @@ fn draw_settings_screen(
     frame.render_widget(status_p, status_pane);
 }
 
-fn format_breadcrumbs(path_str: &str, is_zh: bool) -> String {
-    let path = Path::new(path_str);
-    let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("/home/fd"));
-    
-    let mut display_str = String::new();
-    if path.starts_with(&home) {
-        display_str.push_str(if is_zh { " 🏠 个人目录" } else { " 🏠 ~" });
-        if let Ok(suffix) = path.strip_prefix(&home) {
-            for component in suffix.components() {
-                display_str.push_str(" > 📂 ");
-                display_str.push_str(&component.as_os_str().to_string_lossy());
-            }
-        }
-    } else {
-        display_str.push_str(" 📁 /");
-        for component in path.components() {
-            let name = component.as_os_str().to_string_lossy();
-            if name != "/" && !name.is_empty() {
-                display_str.push_str(" > 📂 ");
-                display_str.push_str(&name);
-            }
-        }
-    }
-    display_str
-}
 
 pub fn draw_app(
     frame: &mut Frame,
     query: &str,
     active_plugin_name: &str,
+    active_plugin_idx: usize,
+    plugins: &[Box<dyn Plugin>],
     results: &[SearchResult],
     list_state: &mut ListState,
     preview_content: Option<String>,
     preview_scroll: u16,
     theme: &ThemeStyles,
     status_msg: Option<&str>,
-    total_plugins_count: usize,
     // Settings configuration
     settings_open: bool,
     settings_focused_pane: usize,
@@ -689,6 +746,7 @@ pub fn draw_app(
 
         let outer_block = Block::default()
             .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(theme.border))
             .style(Style::default().bg(theme.background).fg(theme.foreground));
         let inner_area = outer_block.inner(area);
@@ -722,11 +780,7 @@ pub fn draw_app(
             } else {
                 Style::default().fg(theme.border)
             })
-            .border_type(if focus_pane == 2 {
-                ratatui::widgets::BorderType::Double
-            } else {
-                ratatui::widgets::BorderType::Plain
-            })
+            .border_type(BorderType::Rounded)
             .title(location_title);
 
         if focus_pane == 2 {
@@ -780,11 +834,7 @@ pub fn draw_app(
             } else {
                 Style::default().fg(theme.border)
             })
-            .border_type(if focus_pane == 3 {
-                ratatui::widgets::BorderType::Double
-            } else {
-                ratatui::widgets::BorderType::Plain
-            });
+            .border_type(BorderType::Rounded);
         let search_display_text = if focus_pane == 2 { "" } else { query };
         let cursor_span = Span::raw(search_display_text);
         let search_p = Paragraph::new(Line::from(vec![
@@ -907,11 +957,7 @@ pub fn draw_app(
             } else {
                 Style::default().fg(theme.border)
             })
-            .border_type(if sidebar_focused {
-                ratatui::widgets::BorderType::Double
-            } else {
-                ratatui::widgets::BorderType::Plain
-            })
+            .border_type(BorderType::Rounded)
             .title(fav_title);
 
         let list_items: Vec<ListItem> = visual_items
@@ -1104,11 +1150,7 @@ pub fn draw_app(
         let files_block = Block::default()
             .borders(Borders::ALL)
             .border_style(files_border_style)
-            .border_type(if focus_pane == 1 {
-                ratatui::widgets::BorderType::Double
-            } else {
-                ratatui::widgets::BorderType::Plain
-            })
+            .border_type(BorderType::Rounded)
             .title(matches_title);
 
         if actual_results_count == 0 {
@@ -1146,6 +1188,7 @@ pub fn draw_app(
 
             let preview_block = Block::default()
                 .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
                 .border_style(Style::default().fg(theme.border))
                 .title(Span::styled(title_str, Style::default().fg(theme.border)));
 
@@ -1262,6 +1305,7 @@ pub fn draw_app(
             let menu_title = if is_zh { " 操作菜单 " } else { " Context Menu " };
             let menu_block = Block::default()
                 .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
                 .border_style(Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))
                 .title(menu_title);
 
@@ -1337,6 +1381,7 @@ pub fn draw_app(
 
             let popup_block = Block::default()
                 .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
                 .border_style(Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))
                 .title(format!(" {} ", input_title));
 
@@ -1397,6 +1442,7 @@ pub fn draw_app(
             let properties_title = if is_zh { " 属性信息 " } else { " Properties " };
             let popup_block = Block::default()
                 .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
                 .border_style(Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))
                 .title(properties_title);
 
@@ -1467,6 +1513,7 @@ pub fn draw_app(
             };
             let popup_block = Block::default()
                 .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
                 .border_style(Style::default().fg(theme.error).add_modifier(Modifier::BOLD))
                 .title(confirm_title);
 
@@ -1538,6 +1585,7 @@ pub fn draw_app(
             Style::default().fg(theme.accent).add_modifier(Modifier::BOLD),
         ))
         .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(theme.border))
         .style(Style::default().bg(theme.background).fg(theme.foreground));
 
@@ -1548,46 +1596,125 @@ pub fn draw_app(
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3), // Search Input box
-            Constraint::Min(4),    // Search results + preview window
-            Constraint::Length(1), // Footer keys
+            Constraint::Length(3), // 0: Search input box
+            Constraint::Length(1), // 1: Category tab bar
+            Constraint::Min(4),    // 2: Results list + Preview pane
+            Constraint::Length(1), // 3: Bottom keymap / status bar
         ])
         .split(inner_area);
 
     // 1. Render Search Box
-    let search_title = if is_zh { " 搜索输入 " } else { " Search Query " };
     let is_search_focused = main_focus_pane == 0;
+    let search_title = if is_zh { " 搜索 " } else { " Search " };
     let search_block = Block::default()
-        .title(Span::styled(search_title, Style::default().fg(if is_search_focused { theme.accent } else { theme.border })))
+        .title(Span::styled(
+            search_title,
+            Style::default().fg(if is_search_focused { theme.accent } else { theme.border }),
+        ))
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(if is_search_focused { theme.accent } else { theme.border }))
-        .border_type(if is_search_focused {
-            ratatui::widgets::BorderType::Double
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(if is_search_focused { theme.accent } else { theme.border }));
+
+    let mut search_line_spans = vec![
+        Span::styled(" ❯ ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
+    ];
+    if query.is_empty() {
+        let placeholder = if is_zh {
+            "输入关键字搜索应用、文件、计算或命令... (Tab 切换分类)"
         } else {
-            ratatui::widgets::BorderType::Plain
-        });
+            "Type to search apps, files, calculations or commands... (Tab to switch)"
+        };
+        search_line_spans.push(Span::styled(
+            placeholder,
+            Style::default().fg(theme.border).add_modifier(Modifier::ITALIC),
+        ));
+    } else {
+        search_line_spans.push(Span::styled(
+            query,
+            Style::default().fg(theme.foreground).add_modifier(Modifier::BOLD),
+        ));
+    }
 
-    // Show text cursor at end of query
-    let cursor_span = Span::raw(query);
-    let search_p = Paragraph::new(Line::from(vec![
-        Span::styled("🔍 ", Style::default().fg(theme.accent)),
-        cursor_span,
-    ]))
-    .block(search_block)
-    .style(Style::default().bg(theme.background));
-
+    let search_p = Paragraph::new(Line::from(search_line_spans))
+        .block(search_block)
+        .style(Style::default().bg(theme.background));
     frame.render_widget(search_p, chunks[0]);
 
     if is_search_focused {
-        // Place terminal cursor in the search input box (offset: 1 border + 3 for "🔍 " emoji)
+        // Place terminal cursor right after the query text
         let cursor_x = (chunks[0].x + 4 + query.chars().count() as u16)
             .min(chunks[0].x + chunks[0].width.saturating_sub(2));
         let cursor_y = chunks[0].y + 1;
         frame.set_cursor(cursor_x, cursor_y);
     }
 
-    // 2. Render Results and Preview
-    let middle_area = chunks[1];
+    // 2. Render Category Tab Bar
+    let mut tab_spans = vec![Span::raw(" ")];
+    let mut current_col = 1;
+    let mut active_end = 0;
+
+    let all_label = if is_zh { "✦ 全部" } else { "✦ All" };
+    let all_str = if active_plugin_idx == 0 {
+        format!(" [{all_label}] ")
+    } else {
+        format!("  {all_label}  ")
+    };
+    let all_len = all_str.chars().count();
+    if active_plugin_idx == 0 {
+        active_end = current_col + all_len;
+        tab_spans.push(Span::styled(
+            all_str,
+            Style::default().bg(theme.selection).fg(theme.accent).add_modifier(Modifier::BOLD),
+        ));
+    } else {
+        tab_spans.push(Span::styled(
+            all_str,
+            Style::default().fg(theme.foreground),
+        ));
+    }
+    current_col += all_len;
+
+    for (idx, plugin) in plugins.iter().enumerate() {
+        let tab_idx = idx + 1;
+        let is_active = active_plugin_idx == tab_idx;
+        let (icon, label, color) = get_plugin_tab_info(plugin.id(), is_zh);
+        let tab_str = if is_active {
+            format!(" [{icon} {label}] ")
+        } else {
+            format!("  {icon} {label}  ")
+        };
+        let t_len = tab_str.chars().count() + 1;
+        
+        tab_spans.push(Span::styled(" ", Style::default().fg(theme.border)));
+        if is_active {
+            active_end = current_col + 1 + tab_str.chars().count();
+            tab_spans.push(Span::styled(
+                tab_str,
+                Style::default().bg(theme.selection).fg(color).add_modifier(Modifier::BOLD),
+            ));
+        } else {
+            tab_spans.push(Span::styled(
+                tab_str,
+                Style::default().fg(theme.foreground),
+            ));
+        }
+        current_col += t_len;
+    }
+
+    let avail_w = chunks[1].width as usize;
+    let scroll_x = if active_end > avail_w && avail_w > 0 {
+        (active_end - avail_w + 4) as u16
+    } else {
+        0
+    };
+
+    let tabs_p = Paragraph::new(Line::from(tab_spans))
+        .scroll((0, scroll_x))
+        .style(Style::default().bg(theme.background));
+    frame.render_widget(tabs_p, chunks[1]);
+
+    // 3. Render Results and Preview
+    let middle_area = chunks[2];
     
     // Determine layout depending on preview existence
     let (left_area, right_area) = if let Some(ref preview_text) = preview_content {
@@ -1601,585 +1728,151 @@ pub fn draw_app(
     };
 
     let selected_idx = list_state.selected().unwrap_or(0);
-    let is_file_manager = false;
-    let focus_pane = 1;
+    let is_results_focused = main_focus_pane == 1;
 
-    if is_file_manager {
-        let outer_block = Block::default()
+    if results.is_empty() {
+        let empty_block = Block::default()
             .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(theme.border))
-            .style(Style::default().bg(theme.background).fg(theme.foreground));
-        let inner_area = outer_block.inner(area);
-        frame.render_widget(outer_block, area);
+            .title(Span::styled(
+                if is_zh { " 欢迎与指南 " } else { " Welcome & Guide " },
+                Style::default().fg(theme.accent).add_modifier(Modifier::BOLD),
+            ));
 
-        let file_chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(3), // Top Bar (Header)
-                Constraint::Min(4),    // Main workspace
-                Constraint::Length(1), // Bottom Status Bar
-            ])
-            .split(inner_area);
-
-        let top_area = file_chunks[0];
-        let main_area = file_chunks[1];
-        let footer_area = file_chunks[2];
-
-        // 1. Render Top Header
-        let header_chunks = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Min(10), Constraint::Length(35)])
-            .split(top_area);
-
-        let title_p = Paragraph::new(Line::from(vec![
-            Span::styled(" ᚱ ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
-            Span::styled("Rune Files", Style::default().fg(theme.foreground).add_modifier(Modifier::BOLD)),
-        ])).style(Style::default().bg(theme.background));
-        frame.render_widget(title_p, header_chunks[0]);
-
-        let search_title = if is_zh { " 搜索过滤 " } else { " Search Query " };
-        let search_block = Block::default()
-            .title(Span::styled(search_title, Style::default().fg(theme.border)))
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(theme.border));
-        let cursor_span = Span::raw(query);
-        let search_p = Paragraph::new(Line::from(vec![
-            Span::styled("🔍 ", Style::default().fg(theme.accent)),
-            cursor_span,
-        ]))
-        .block(search_block)
-        .style(Style::default().bg(theme.background));
-        frame.render_widget(search_p, header_chunks[1]);
-
-        // 2. Split Main Workspace into Sidebar and Files list
-        let main_columns = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Length(24), Constraint::Min(20)])
-            .split(main_area);
-
-        let sidebar_area = main_columns[0];
-        let files_area = main_columns[1];
-
-        let fav_area = sidebar_area;
-
-        let first_res = results.iter().find(|r| r.plugin_id == "file_manager");
-        let sidebar_focused = first_res
-            .and_then(|r| r.metadata.get("sidebar_focused").map(|s| s == "true"))
-            .unwrap_or(false);
-        let sidebar_selected_idx = first_res
-            .and_then(|r| r.metadata.get("sidebar_selected_idx").and_then(|s| s.parse::<usize>().ok()))
-            .unwrap_or(0);
-
-        // --- Render Favorites & Custom Groups ---
-        let home_c = first_res.and_then(|r| r.metadata.get("fav_home_count").map(|s| s.as_str())).unwrap_or("0");
-        let desktop_c = first_res.and_then(|r| r.metadata.get("fav_desktop_count").map(|s| s.as_str())).unwrap_or("0");
-        let docs_c = first_res.and_then(|r| r.metadata.get("fav_docs_count").map(|s| s.as_str())).unwrap_or("0");
-        let downloads_c = first_res.and_then(|r| r.metadata.get("fav_downloads_count").map(|s| s.as_str())).unwrap_or("0");
-        let music_c = first_res.and_then(|r| r.metadata.get("fav_music_count").map(|s| s.as_str())).unwrap_or("0");
-        let pics_c = first_res.and_then(|r| r.metadata.get("fav_pics_count").map(|s| s.as_str())).unwrap_or("0");
-        let videos_c = first_res.and_then(|r| r.metadata.get("fav_videos_count").map(|s| s.as_str())).unwrap_or("0");
-        let trash_c = first_res.and_then(|r| r.metadata.get("fav_trash_count").map(|s| s.as_str())).unwrap_or("0");
-
-        let fav_items = if is_zh {
+        let empty_lines = if query.is_empty() {
             vec![
-                (format!("🏠 主文件夹 ({})", home_c), 0),
-                (format!("🖥️ 桌面 ({})", desktop_c), 1),
-                (format!("📄 文档 ({})", docs_c), 2),
-                (format!("📥 下载 ({})", downloads_c), 3),
-                (format!("🎵 音乐 ({})", music_c), 4),
-                (format!("📷 图片 ({})", pics_c), 5),
-                (format!("🎥 视频 ({})", videos_c), 6),
-                (format!("🗑️ 回收站 ({})", trash_c), 7),
+                Line::from(""),
+                Line::from(vec![
+                    Span::styled("   ✦ ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
+                    Span::styled("Rune Launcher", Style::default().fg(theme.foreground).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        if is_zh { " — 极速、轻量、高颜值的全能启动器" } else { " — Fast, lightweight, beautiful launcher" },
+                        Style::default().fg(theme.border),
+                    ),
+                ]),
+                Line::from(""),
+                Line::from(vec![
+                    Span::styled(
+                        if is_zh { "   快速开始与使用技巧:" } else { "   Quick Start & Tips:" },
+                        Style::default().fg(theme.accent).add_modifier(Modifier::UNDERLINED),
+                    ),
+                ]),
+                Line::from(""),
+                Line::from(vec![
+                    Span::styled("   • ", Style::default().fg(theme.accent)),
+                    Span::styled(
+                        if is_zh { "直接输入应用名 (如 firefox, code) 即可快速查找并启动" } else { "Type application name (e.g. firefox, code) to search & launch" },
+                        Style::default().fg(theme.foreground),
+                    ),
+                ]),
+                Line::from(vec![
+                    Span::styled("   • ", Style::default().fg(theme.accent)),
+                    Span::styled(
+                        if is_zh { "直接输入算式进行计算 (如 12 * 8 或 100 USD to CNY)" } else { "Type formula or currency (e.g. 12 * 8 or 100 USD to EUR)" },
+                        Style::default().fg(theme.foreground),
+                    ),
+                ]),
+                Line::from(vec![
+                    Span::styled("   • ", Style::default().fg(theme.accent)),
+                    Span::styled(
+                        if is_zh { "输入 > 执行 Shell 终端命令 (如 > ls -la)" } else { "Type > to run shell command (e.g. > ls -la)" },
+                        Style::default().fg(theme.foreground),
+                    ),
+                ]),
+                Line::from(vec![
+                    Span::styled("   • ", Style::default().fg(theme.accent)),
+                    Span::styled(
+                        if is_zh { "按 Tab / Shift-Tab 快速在所有插件分类间切换过滤" } else { "Press Tab / Shift-Tab to switch plugin category filters" },
+                        Style::default().fg(theme.foreground),
+                    ),
+                ]),
+                Line::from(vec![
+                    Span::styled("   • ", Style::default().fg(theme.accent)),
+                    Span::styled(
+                        if is_zh { "按 F1 进入偏好设置面板，可自定义主题配色、语言与字体" } else { "Press F1 to open settings panel (theme, language, editor)" },
+                        Style::default().fg(theme.foreground),
+                    ),
+                ]),
+                Line::from(""),
             ]
         } else {
             vec![
-                (format!("🏠 Home ({})", home_c), 0),
-                (format!("🖥️ Desktop ({})", desktop_c), 1),
-                (format!("📄 Documents ({})", docs_c), 2),
-                (format!("📥 Downloads ({})", downloads_c), 3),
-                (format!("🎵 Music ({})", music_c), 4),
-                (format!("📷 Pictures ({})", pics_c), 5),
-                (format!("🎥 Videos ({})", videos_c), 6),
-                (format!("🗑️ Trash ({})", trash_c), 7),
+                Line::from(""),
+                Line::from(vec![
+                    Span::styled("   🔍 ", Style::default().fg(theme.warning).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        if is_zh { "未找到匹配结果" } else { "No matches found" },
+                        Style::default().fg(theme.warning).add_modifier(Modifier::BOLD),
+                    ),
+                ]),
+                Line::from(""),
+                Line::from(vec![
+                    Span::raw("   "),
+                    Span::styled(
+                        if is_zh { format!("没有找到与 \"{}\" 相关的结果", query) } else { format!("No results found matching \"{}\"", query) },
+                        Style::default().fg(theme.foreground),
+                    ),
+                ]),
+                Line::from(""),
+                Line::from(vec![
+                    Span::styled("   💡 提示: ", Style::default().fg(theme.accent)),
+                    Span::styled(
+                        if is_zh { "请检查输入拼写，或按 Tab 键切换到「全部」查看" } else { "Check spelling or press Tab to switch to 'All'" },
+                        Style::default().fg(theme.border),
+                    ),
+                ]),
+                Line::from(""),
             ]
         };
 
-        let mut visual_items = Vec::new();
-
-        // 1. Places Header
-        visual_items.push((if is_zh { "常用位置".to_string() } else { "Places".to_string() }, false, None));
-        for (label, idx) in fav_items {
-            visual_items.push((label, true, Some(idx)));
-        }
-
-        // 2. Recently Used Header
-        visual_items.push((if is_zh { "最近使用".to_string() } else { "Recently Used".to_string() }, false, None));
-        visual_items.push((if is_zh { "⏱️ 最近文件".to_string() } else { "⏱️ Recent Files".to_string() }, true, Some(8)));
-        visual_items.push((if is_zh { "📂 最近位置".to_string() } else { "📂 Recent Locations".to_string() }, true, Some(9)));
-
-        // 3. Storage Devices Header
-        visual_items.push((if is_zh { "存储设备".to_string() } else { "Storage Devices".to_string() }, false, None));
-        let drives_count = first_res.and_then(|r| r.metadata.get("fav_drives_count").and_then(|s| s.parse::<usize>().ok())).unwrap_or(0);
-        for d in 0..drives_count {
-            let name = first_res.and_then(|r| r.metadata.get(&format!("fav_drive_{}_name", d))).cloned().unwrap_or_default();
-            let kind = first_res.and_then(|r| r.metadata.get(&format!("fav_drive_{}_kind", d))).map(|s| s.as_str()).unwrap_or("drive_root");
-            let icon = if kind == "drive_root" { "💽 " } else { "💾 " };
-            visual_items.push((format!("{}{}", icon, name), true, Some(10 + d)));
-        }
-
-        let fav_title = if is_zh { " 导航栏 " } else { " Navigation " };
-        let fav_block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(if sidebar_focused {
-                Style::default().fg(theme.accent)
-            } else {
-                Style::default().fg(theme.border)
-            })
-            .border_type(if sidebar_focused {
-                ratatui::widgets::BorderType::Double
-            } else {
-                ratatui::widgets::BorderType::Plain
-            })
-            .title(fav_title);
-
-        let list_items: Vec<ListItem> = visual_items
-            .iter()
-            .map(|(label, is_selectable, opt_idx)| {
-                if !is_selectable {
-                    ListItem::new(Line::from(vec![
-                        Span::styled(format!(" {}", label), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
-                    ]))
-                } else {
-                    let idx = opt_idx.unwrap();
-                    let is_selected = idx == sidebar_selected_idx;
-                    let style = if is_selected {
-                        if sidebar_focused {
-                            Style::default().bg(theme.selection).fg(theme.accent).add_modifier(Modifier::BOLD)
-                        } else {
-                            Style::default().bg(theme.selection).fg(theme.foreground)
-                        }
-                    } else {
-                        Style::default().fg(theme.foreground)
-                    };
-                    let prefix = if is_selected { "▶ " } else { "  " };
-                    ListItem::new(Line::from(Span::styled(format!("{prefix}{label}"), style)))
-                }
-            })
-            .collect();
-
-        let fav_list = List::new(list_items)
-            .block(fav_block)
+        let empty_p = Paragraph::new(empty_lines)
+            .block(empty_block)
             .style(Style::default().bg(theme.background));
-        frame.render_widget(fav_list, fav_area);
-
-        // --- Render Right Column (Breadcrumbs & Files List) ---
-        let files_rows = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(3), // Location / Breadcrumbs
-                Constraint::Length(1), // Column headers
-                Constraint::Min(1),    // Files List
-            ])
-            .split(files_area);
-
-        let path_area = files_rows[0];
-        let header_area = files_rows[1];
-        let list_area = files_rows[2];
-
-        let location_title = if is_zh { " 当前路径 " } else { " Location " };
-        let path_block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(theme.border))
-            .title(location_title);
-
-        let current_dir_str = first_res
-            .and_then(|r| r.metadata.get("current_dir").cloned())
-            .unwrap_or_else(|| {
-                std::env::current_dir()
-                    .unwrap_or_else(|_| dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("/home/fd")))
-                    .to_string_lossy()
-                    .to_string()
-            });
-
-        // Parse beautiful breadcrumbs
-        let home_dir = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("/home/fd"));
-        let current_path = std::path::Path::new(&current_dir_str);
-        
-        let mut path_spans = Vec::new();
-        path_spans.push(Span::raw(" "));
-        if current_path.starts_with(&home_dir) {
-            path_spans.push(Span::styled("🏠 Home", Style::default().fg(theme.accent)));
-            if let Ok(suffix) = current_path.strip_prefix(&home_dir) {
-                for component in suffix.components() {
-                    path_spans.push(Span::styled(" › ", Style::default().fg(theme.border).add_modifier(Modifier::DIM)));
-                    path_spans.push(Span::styled(format!("📂 {}", component.as_os_str().to_string_lossy()), Style::default().fg(theme.foreground)));
-                }
-            }
-        } else {
-            path_spans.push(Span::styled("📁 Root", Style::default().fg(theme.accent)));
-            for component in current_path.components() {
-                let name = component.as_os_str().to_string_lossy();
-                if name != "/" && !name.is_empty() {
-                    path_spans.push(Span::styled(" › ", Style::default().fg(theme.border).add_modifier(Modifier::DIM)));
-                    path_spans.push(Span::styled(format!("📂 {}", name), Style::default().fg(theme.foreground)));
-                }
-            }
-        }
-        
-        if let Some(last) = path_spans.last_mut() {
-            if last.content != " " {
-                last.style = Style::default().fg(theme.accent).add_modifier(Modifier::BOLD);
-            }
-        }
-
-        let path_p = Paragraph::new(Line::from(path_spans)).block(path_block);
-        frame.render_widget(path_p, path_area);
-
-        // Column Headers
-        let avail_w = (files_area.width as usize).saturating_sub(6);
-        let mod_w = 16;
-        let perm_w = 11;
-        let size_w = 10;
-        let name_w = avail_w.saturating_sub(mod_w + size_w + perm_w + 6);
-
-        let h_name = format!("{:<width$}", if is_zh { "名称" } else { "Name" }, width = name_w);
-        let h_size = format!("{:>width$}", if is_zh { "大小" } else { "Size" }, width = size_w);
-        let h_perm = format!("{:>width$}", if is_zh { "权限" } else { "Permissions" }, width = perm_w);
-        let h_mod = format!("{:>width$}", if is_zh { "修改时间" } else { "Modified" }, width = mod_w);
-
-        let header_line = Line::from(vec![
-            Span::raw("  "),
-            Span::styled(h_name, Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
-            Span::raw("  "),
-            Span::styled(h_size, Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
-            Span::raw("  "),
-            Span::styled(h_perm, Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
-            Span::raw("  "),
-            Span::styled(h_mod, Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
-        ]);
-        let header_p = Paragraph::new(header_line);
-        frame.render_widget(header_p, header_area);
-
-        // Files List (Redesigned as an aligned multi-column visual list)
-        let files_focused = focus_pane == 1;
-        let files_border_style = if files_focused {
-            Style::default().fg(theme.accent)
-        } else {
-            Style::default().fg(theme.border)
-        };
-
-        let matches_title = if is_zh {
-            format!(" 文件列表 (共 {} 项) ", results.len())
-        } else {
-            format!(" Files List ({} items) ", results.len())
-        };
-
+        frame.render_widget(empty_p, left_area);
+    } else {
         let items_list: Vec<ListItem> = results
             .iter()
             .enumerate()
             .map(|(idx, res)| {
                 let is_selected = idx == selected_idx;
                 let style = if is_selected {
-                    Style::default().bg(theme.selection)
-                } else {
                     Style::default()
-                };
-
-                let prefix = if is_selected && !sidebar_focused { "▶ " } else { "  " };
-
-                let name = res.metadata.get("name").cloned().unwrap_or_else(|| res.title.clone());
-                let icon = res.metadata.get("icon").map(|s| s.as_str()).unwrap_or("📄");
-                let size = res.metadata.get("size").cloned().unwrap_or_default();
-                let modified = res.metadata.get("modified").cloned().unwrap_or_default();
-                let permissions = res.metadata.get("permissions").cloned().unwrap_or_else(|| "---------".to_string());
-
-                let mut name_part = format!("{icon} {name}");
-                if name_part.len() > name_w {
-                    name_part.truncate(name_w.saturating_sub(3));
-                    name_part.push_str("...");
-                }
-
-                let name_padded = format!("{:<width$}", name_part, width = name_w);
-                let size_padded = format!("{:>width$}", size, width = size_w);
-                let perm_padded = format!("{:>width$}", permissions, width = perm_w);
-                let mod_padded = format!("{:>width$}", modified, width = mod_w);
-
-                let name_style = if is_selected && !sidebar_focused {
-                    Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)
+                        .bg(theme.selection)
+                        .fg(theme.accent)
+                        .add_modifier(Modifier::BOLD)
                 } else {
                     Style::default().fg(theme.foreground)
                 };
 
-                let size_style = Style::default().fg(if is_selected { theme.foreground } else { theme.border });
-                let perm_style = Style::default().fg(if is_selected { theme.foreground } else { theme.border }).add_modifier(Modifier::DIM);
-                let mod_style = Style::default().fg(if is_selected { theme.foreground } else { theme.border });
+                let prefix_span = if is_selected {
+                    Span::styled("▶ ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))
+                } else {
+                    Span::raw("  ")
+                };
 
-                let line = Line::from(vec![
-                    Span::styled(prefix, Style::default().fg(theme.accent)),
-                    Span::styled(name_padded, name_style),
-                    Span::raw("  "),
-                    Span::styled(size_padded, size_style),
-                    Span::raw("  "),
-                    Span::styled(perm_padded, perm_style),
-                    Span::raw("  "),
-                    Span::styled(mod_padded, mod_style),
-                ]);
+                let (badge_icon, badge_label, badge_color) = get_plugin_tab_info(&res.plugin_id, is_zh);
+                let badge_span = Span::styled(
+                    format!(" [{badge_icon} {badge_label}] "),
+                    Style::default().fg(badge_color).add_modifier(Modifier::BOLD),
+                );
 
-                ListItem::new(line).style(style)
-            })
-            .collect();
-
-        let files_block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(files_border_style)
-            .border_type(if files_focused {
-                ratatui::widgets::BorderType::Double
-            } else {
-                ratatui::widgets::BorderType::Plain
-            })
-            .title(matches_title);
-
-        let list_widget = List::new(items_list)
-            .block(files_block)
-            .style(Style::default().bg(theme.background));
-        frame.render_stateful_widget(list_widget, list_area, list_state);
-
-        // --- Render Footer ---
-        let total_dirs = first_res.and_then(|r| r.metadata.get("total_dirs").map(|s| s.as_str())).unwrap_or("0");
-        let total_files = first_res.and_then(|r| r.metadata.get("total_files").map(|s| s.as_str())).unwrap_or("0");
-
-        let selected_desc = if !results.is_empty() && selected_idx < results.len() {
-            let sel = &results[selected_idx];
-            let name = sel.metadata.get("name").map(|s| s.as_str()).unwrap_or("");
-            let size = sel.metadata.get("size").map(|s| s.as_str()).unwrap_or("");
-            if name == ".." {
-                if is_zh { "返回上一级".to_string() } else { "Go Up".to_string() }
-            } else {
-                format!("{name} ({size})")
-            }
-        } else {
-            if is_zh { "无选中".to_string() } else { "No selection".to_string() }
-        };
-
-        let stats_str = if is_zh {
-            format!(" 📁 {total_dirs} 个文件夹, 📄 {total_files} 个文件 │ 当前选中: {selected_desc} ")
-        } else {
-            format!(" 📁 {total_dirs} folders, 📄 {total_files} files │ Selected: {selected_desc} ")
-        };
-
-        let footer_text = if let Some(msg) = status_msg {
-            Span::styled(msg, Style::default().fg(theme.success).add_modifier(Modifier::BOLD))
-        } else {
-            Span::styled(stats_str, Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))
-        };
-
-        let cheatsheet_text = if is_zh {
-            " ⌨️ F2:关闭 | m:操作菜单 | Alt-H:显示隐藏 | ←/→:焦点 | Alt-N:建文件夹 | Alt-F:建文件 | Del:删除 | F4:终端 "
-        } else {
-            " ⌨️ F2:Close | m:Menu | Alt-H:Hidden | ←/→:Focus | Alt-N:Dir | Alt-F:File | Del:Delete | F4:Terminal "
-        };
-
-        let footer_p = Paragraph::new(Line::from(vec![
-            footer_text,
-            Span::raw(" | "),
-            Span::styled(cheatsheet_text, Style::default().fg(theme.border).add_modifier(Modifier::DIM)),
-        ]))
-        .style(Style::default().bg(theme.background));
-        frame.render_widget(footer_p, footer_area);
-
-        // Draw Context Menu Popup if open
-        let context_menu_open = first_res
-            .and_then(|r| r.metadata.get("context_menu_open").map(|s| s == "true"))
-            .unwrap_or(false);
-        if context_menu_open {
-            let context_menu_selected_idx = first_res
-                .and_then(|r| r.metadata.get("context_menu_selected_idx").and_then(|s| s.parse::<usize>().ok()))
-                .unwrap_or(0);
-
-            let menu_options = vec![
-                if is_zh { "▶ 打开 (Enter)" } else { "▶ Open (Enter)" },
-                if is_zh { "📋 复制 (Copy)" } else { "📋 Copy" },
-                if is_zh { "✂️ 剪切 (Cut)" } else { "✂️ Cut" },
-                if is_zh { "📥 粘贴 (Paste)" } else { "📥 Paste" },
-                if is_zh { "✏️ 重命名 (Rename)" } else { "✏️ Rename" },
-                if is_zh { "🗑️ 删除 (Delete)" } else { "🗑️ Delete" },
-                if is_zh { "📄 新建文件 (New File)" } else { "📄 New File" },
-                if is_zh { "📁 新建文件夹 (New Dir)" } else { "📁 New Folder" },
-                if is_zh { "ℹ️ 属性 (Properties)" } else { "ℹ️ Properties" },
-                if is_zh { "❌ 取消 (Cancel)" } else { "❌ Cancel" },
-            ];
-
-            let menu_title = if is_zh { " 操作菜单 " } else { " Context Menu " };
-            let menu_block = Block::default()
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))
-                .title(menu_title);
-
-            let opt_items: Vec<ListItem> = menu_options
-                .iter()
-                .enumerate()
-                .map(|(idx, opt)| {
-                    let is_hovered = idx == context_menu_selected_idx;
-                    let style = if is_hovered {
-                        Style::default().bg(theme.selection).fg(theme.accent).add_modifier(Modifier::BOLD)
+                let title_span = Span::styled(
+                    res.title.clone(),
+                    if is_selected {
+                        Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)
                     } else {
                         Style::default().fg(theme.foreground)
-                    };
-                    ListItem::new(Line::from(Span::styled(*opt, style)))
-                })
-                .collect();
-            let opt_list = List::new(opt_items).block(menu_block).style(Style::default().bg(theme.background));
-            
-            let popup_area = fixed_centered_rect(32, 12, area);
-            frame.render_widget(Clear, popup_area); // clear underneath
-            frame.render_widget(opt_list, popup_area);
-        }
-
-        return;
-    }
-
-    let (list_area, breadcrumb_p, header_p) = if is_file_manager {
-        let list_chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(1), // Breadcrumbs path
-                Constraint::Length(1), // Columns header
-                Constraint::Min(1),    // List itself
-            ])
-            .split(left_area);
-        
-        let current_dir_str = results.first()
-            .and_then(|r| r.metadata.get("current_dir").cloned())
-            .unwrap_or_else(|| {
-                std::env::current_dir()
-                    .unwrap_or_else(|_| dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("/home/fd")))
-                    .to_string_lossy()
-                    .to_string()
-            });
-        let breadcrumb_text = format_breadcrumbs(&current_dir_str, is_zh);
-        let breadcrumb_p = Paragraph::new(Line::from(Span::styled(
-            breadcrumb_text,
-            Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)
-        )));
-
-        let avail_w = (left_area.width as usize).saturating_sub(6);
-        let mod_w = 16;
-        let size_w = 10;
-        let name_w = avail_w.saturating_sub(mod_w + size_w + 2);
-        
-        let h_name = format!("{:<width$}", if is_zh { "名称" } else { "Name" }, width = name_w);
-        let h_size = format!("{:>width$}", if is_zh { "大小" } else { "Size" }, width = size_w);
-        let h_mod = format!("{:>width$}", if is_zh { "修改时间" } else { "Modified" }, width = mod_w);
-        
-        let header_text = format!("  {h_name}  {h_size}  {h_mod}");
-        let header_p = Paragraph::new(Line::from(Span::styled(
-            header_text,
-            Style::default().fg(theme.border).add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
-        )));
-        
-        (list_chunks[2], Some(breadcrumb_p), Some(header_p))
-    } else {
-        (left_area, None, None)
-    };
-
-    if let Some(bp) = breadcrumb_p {
-        frame.render_widget(bp, left_area); // Renders inside its own split chunk
-    }
-    // Wait, let's render them in the specific splits
-    if is_file_manager {
-        let list_chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(1), // Breadcrumbs path
-                Constraint::Length(1), // Columns header
-                Constraint::Min(1),    // List itself
-            ])
-            .split(left_area);
-        
-        if let Some(ref bp) = results.first()
-            .and_then(|r| r.metadata.get("current_dir").cloned()) {
-            let breadcrumb_text = format_breadcrumbs(bp, is_zh);
-            let bp_widget = Paragraph::new(Line::from(Span::styled(
-                breadcrumb_text,
-                Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)
-            )));
-            frame.render_widget(bp_widget, list_chunks[0]);
-        } else {
-            let current_dir_str = std::env::current_dir()
-                .unwrap_or_else(|_| dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("/home/fd")))
-                .to_string_lossy()
-                .to_string();
-            let breadcrumb_text = format_breadcrumbs(&current_dir_str, is_zh);
-            let bp_widget = Paragraph::new(Line::from(Span::styled(
-                breadcrumb_text,
-                Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)
-            )));
-            frame.render_widget(bp_widget, list_chunks[0]);
-        }
-
-        if let Some(hp) = header_p {
-            frame.render_widget(hp, list_chunks[1]);
-        }
-    }
-
-    // Render Search Results List
-    let items_list: Vec<ListItem> = results
-        .iter()
-        .enumerate()
-        .map(|(idx, res)| {
-            let is_selected = idx == selected_idx;
-            let style = if is_selected {
-                Style::default()
-                    .bg(theme.selection)
-                    .fg(theme.accent)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(theme.foreground)
-            };
-
-            let mut lines = vec![];
-            let prefix = if is_selected { "▶ " } else { "  " };
-
-            if res.plugin_id == "file_manager" {
-                let name = res.metadata.get("name").cloned().unwrap_or_else(|| res.title.clone());
-                let icon = res.metadata.get("icon").map(|s| s.as_str()).unwrap_or("📄");
-                let size = res.metadata.get("size").cloned().unwrap_or_default();
-                let modified = res.metadata.get("modified").cloned().unwrap_or_default();
-
-                let avail_w = (left_area.width as usize).saturating_sub(6);
-                let mod_w = 16;
-                let size_w = 10;
-                let name_w = avail_w.saturating_sub(mod_w + size_w + 2);
-
-                let mut name_part = format!("{icon} {name}");
-                if name_part.len() > name_w {
-                    name_part.truncate(name_w.saturating_sub(3));
-                    name_part.push_str("...");
-                }
-                
-                let name_padded = format!("{:<width$}", name_part, width = name_w);
-                let size_padded = format!("{:>width$}", size, width = size_w);
-                let mod_padded = format!("{:>width$}", modified, width = mod_w);
-
-                let display_str = format!("{prefix}{name_padded}  {size_padded}  {mod_padded}");
-                lines.push(Line::from(Span::styled(
-                    display_str,
-                    Style::default().fg(if is_selected { theme.accent } else { theme.foreground }).add_modifier(if is_selected { Modifier::BOLD } else { Modifier::empty() }),
-                )));
-            } else {
-                // Build Title span
-                let title_span = Span::styled(
-                    format!("{prefix}{}", res.title),
-                    Style::default().fg(if is_selected { theme.accent } else { theme.foreground }),
+                    },
                 );
-                
-                // Subtitle or plugin indicator
-                let mut line_spans = vec![title_span];
+
+                let mut line_spans = vec![prefix_span, badge_span, title_span];
+
                 if let Some(ref sub) = res.subtitle {
-                    let sub_truncated = if sub.len() > 45 {
-                        format!(" | {}...", &sub[..42])
+                    let sub_truncated = if sub.len() > 38 {
+                        format!("  │  {}...", &sub[..35])
                     } else {
-                        format!(" | {sub}")
+                        format!("  │  {sub}")
                     };
                     line_spans.push(Span::styled(
                         sub_truncated,
@@ -2187,39 +1880,38 @@ pub fn draw_app(
                     ));
                 }
 
-                lines.push(Line::from(line_spans));
-            }
+                if is_selected {
+                    line_spans.push(Span::styled(
+                        "  ↵",
+                        Style::default().fg(theme.accent).add_modifier(Modifier::DIM),
+                    ));
+                }
 
-            ListItem::new(lines).style(style)
-        })
-        .collect();
+                ListItem::new(Line::from(line_spans)).style(style)
+            })
+            .collect();
 
-    let matches_title = if is_zh {
-        format!(" 匹配结果 (找到 {} 个) ", results.len())
-    } else {
-        format!(" Matches (Found {}) ", results.len())
-    };
-
-    let is_results_focused = main_focus_pane == 1;
-    let results_block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(if is_results_focused { theme.accent } else { theme.border }))
-        .border_type(if is_results_focused {
-            ratatui::widgets::BorderType::Double
+        let matches_title = if is_zh {
+            format!(" 匹配结果 (找到 {} 个) ", results.len())
         } else {
-            ratatui::widgets::BorderType::Plain
-        })
-        .title(Span::styled(
-            matches_title,
-            Style::default().fg(if is_results_focused { theme.accent } else { theme.border }),
-        ));
+            format!(" Matches (Found {}) ", results.len())
+        };
 
-    let list_widget = List::new(items_list)
-        .block(results_block)
-        .style(Style::default().bg(theme.background));
+        let results_block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(if is_results_focused { theme.accent } else { theme.border }))
+            .title(Span::styled(
+                matches_title,
+                Style::default().fg(if is_results_focused { theme.accent } else { theme.border }),
+            ));
 
-    // Stateful render to enable list auto-scrolling
-    frame.render_stateful_widget(list_widget, list_area, list_state);
+        let list_widget = List::new(items_list)
+            .block(results_block)
+            .style(Style::default().bg(theme.background));
+
+        frame.render_stateful_widget(list_widget, left_area, list_state);
+    }
 
     // Render Preview Box (if available)
     if let Some((r_area, text)) = right_area {
@@ -2239,6 +1931,7 @@ pub fn draw_app(
 
         let preview_block = Block::default()
             .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(theme.border))
             .title(Span::styled(title_str, Style::default().fg(theme.border)));
 
@@ -2273,67 +1966,80 @@ pub fn draw_app(
         frame.render_widget(preview_p, r_area);
     }
 
-    // 3. Render Footer (status line & keybindings helper)
-    let footer_text = if let Some(msg) = status_msg {
-        Span::styled(msg, Style::default().fg(theme.success).add_modifier(Modifier::BOLD))
-    } else if is_file_manager {
-        let first_res = results.iter().find(|r| r.plugin_id == "file_manager");
-        let total_dirs = first_res.and_then(|r| r.metadata.get("total_dirs").map(|s| s.as_str())).unwrap_or("0");
-        let total_files = first_res.and_then(|r| r.metadata.get("total_files").map(|s| s.as_str())).unwrap_or("0");
-        
-        let selected_desc = if !results.is_empty() && selected_idx < results.len() {
-            let sel = &results[selected_idx];
-            let name = sel.metadata.get("name").map(|s| s.as_str()).unwrap_or("");
-            let size = sel.metadata.get("size").map(|s| s.as_str()).unwrap_or("");
-            if name == ".." {
-                if is_zh { "返回上一级".to_string() } else { "Go Up".to_string() }
-            } else {
-                format!("{name} ({size})")
-            }
-        } else {
-            if is_zh { "无选中".to_string() } else { "No selection".to_string() }
-        };
-
-        let stats_str = if is_zh {
-            format!(" 📁 {total_dirs} 个文件夹, 📄 {total_files} 个文件 │ 当前选中: {selected_desc} ")
-        } else {
-            format!(" 📁 {total_dirs} folders, 📄 {total_files} files │ Selected: {selected_desc} ")
-        };
-
-        Span::styled(stats_str, Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))
-    } else if preview_content.is_some() {
-        Span::styled(
-            if is_zh {
-                " Enter 启动 │ Tab 切换模式 │ Shift-↑/↓ 滚动详情 │ Esc 退出 │ F1 设置 "
-            } else {
-                " Enter Launch │ Tab Mode │ Shift-↑/↓ Scroll Detail │ Esc Exit │ F1 Settings "
-            },
-            Style::default().fg(theme.border),
-        )
+    // 4. Render Footer (status line & keybindings helper)
+    let footer_spans = if let Some(msg) = status_msg {
+        vec![Span::styled(msg, Style::default().fg(theme.success).add_modifier(Modifier::BOLD))]
     } else {
-        Span::styled(
+        let mut spans = vec![
+            Span::styled(" [↵ Enter] ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
+            Span::styled(if is_zh { "启动" } else { "Launch" }, Style::default().fg(theme.foreground)),
+            Span::styled("  [Tab] ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
+            Span::styled(if is_zh { "切换分类" } else { "Category" }, Style::default().fg(theme.foreground)),
+        ];
+        if preview_content.is_some() {
+            spans.push(Span::styled("  [Shift-↑/↓] ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)));
+            spans.push(Span::styled(if is_zh { "滚动详情" } else { "Scroll" }, Style::default().fg(theme.foreground)));
+        }
+        spans.push(Span::styled("  [F1] ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)));
+        spans.push(Span::styled(if is_zh { "设置" } else { "Settings" }, Style::default().fg(theme.foreground)));
+        spans.push(Span::styled("  [Esc] ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)));
+        spans.push(Span::styled(if is_zh { "退出" } else { "Exit" }, Style::default().fg(theme.foreground)));
+        spans.push(Span::styled(" │ ", Style::default().fg(theme.border).add_modifier(Modifier::DIM)));
+        spans.push(Span::styled(
             if is_zh {
-                " Enter 启动 │ Tab 切换模式 │ Esc 退出 │ F1 设置 "
+                format!("Rune ({} 个插件)", plugins.len())
             } else {
-                " Enter Launch │ Tab Mode │ Esc Exit │ F1 Settings "
-            },
-            Style::default().fg(theme.border),
-        )
-    };
-
-    let footer_p = Paragraph::new(Line::from(vec![
-        footer_text,
-        Span::raw(" | "),
-        Span::styled(
-            if is_zh {
-                format!("Rune: {} 个激活插件", total_plugins_count)
-            } else {
-                format!("Rune: {} active plugins", total_plugins_count)
+                format!("Rune ({} plugins)", plugins.len())
             },
             Style::default().fg(theme.border).add_modifier(Modifier::DIM),
-        ),
-    ]))
-    .style(Style::default().bg(theme.background));
+        ));
+        spans
+    };
 
-    frame.render_widget(footer_p, chunks[2]);
+    let footer_p = Paragraph::new(Line::from(footer_spans))
+        .style(Style::default().bg(theme.background));
+
+    frame.render_widget(footer_p, chunks[3]);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ui::ThemeStyles;
+
+    #[test]
+    fn test_get_plugin_tab_info() {
+        let (icon, label_zh, _color) = get_plugin_tab_info("applications", true);
+        assert_eq!(icon, "🖥️");
+        assert_eq!(label_zh, "应用");
+
+        let (icon, label_en, _color) = get_plugin_tab_info("calculator", false);
+        assert_eq!(icon, "🧮");
+        assert_eq!(label_en, "Calc");
+
+        let (icon, label_fallback, _color) = get_plugin_tab_info("unknown_plugin", true);
+        assert_eq!(icon, "✦");
+        assert_eq!(label_fallback, "插件");
+    }
+
+    #[test]
+    fn test_parse_markdown_line() {
+        let theme_data = crate::ui::theme::get_builtin_theme("catppuccin").unwrap();
+        let theme = ThemeStyles::from_theme(&theme_data, false);
+        let h1_line = parse_markdown_line("# Header Title", &theme);
+        assert_eq!(h1_line.spans.len(), 1);
+        assert_eq!(h1_line.spans[0].content, "Header Title");
+
+        let key_val_line = parse_markdown_line("**Version**: 1.0.0", &theme);
+        assert_eq!(key_val_line.spans.len(), 2);
+        assert_eq!(key_val_line.spans[0].content, "Version: ");
+        assert_eq!(key_val_line.spans[1].content, "1.0.0");
+
+        let code_line = parse_markdown_line("Run `cargo build` now", &theme);
+        assert_eq!(code_line.spans.len(), 3);
+        assert_eq!(code_line.spans[0].content, "Run ");
+        assert_eq!(code_line.spans[1].content, "cargo build");
+        assert_eq!(code_line.spans[2].content, " now");
+    }
+}
+
