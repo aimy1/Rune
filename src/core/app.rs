@@ -227,7 +227,7 @@ impl App {
 
     fn get_options_count(&self) -> usize {
         match self.settings_selected_category {
-            0 => 7, // 6 TUI themes + 1 transparent background toggle
+            0 => 9, // 8 TUI themes + 1 transparent background toggle
             1 => 2, // UI language
             2 => 5, // editor (+ custom)
             3 => 4, // Terminal Shell (bash, zsh, sh, custom)
@@ -249,6 +249,8 @@ impl App {
                     "nord".to_string(),
                     "gruvbox".to_string(),
                     "everforest".to_string(),
+                    "dracula".to_string(),
+                    "one_dark".to_string(),
                     "transparent".to_string(),
                 ];
                 if self.settings_selected_option < themes.len() {
@@ -825,13 +827,14 @@ impl App {
                     f,
                     &self.query,
                     &self.active_plugin_name(),
+                    self.active_plugin_idx,
+                    &self.plugins,
                     &self.results,
                     &mut self.list_state,
                     preview_text,
                     self.preview_scroll,
                     &self.theme_styles,
                     status_msg_str.as_deref(),
-                    self.plugins.len(),
                     self.settings_open,
                     self.settings_focused_pane,
                     self.settings_selected_category,
