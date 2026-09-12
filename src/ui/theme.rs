@@ -134,6 +134,26 @@ pub fn get_builtin_theme(name: &str) -> Option<Theme> {
             success: "#a7c080".to_string(),
             error: "#e67e80".to_string(),
         }),
+        "dracula" => Some(Theme {
+            background: "#282a36".to_string(),
+            foreground: "#f8f8f2".to_string(),
+            accent: "#bd93f9".to_string(),
+            border: "#6272a4".to_string(),
+            selection: "#44475a".to_string(),
+            warning: "#f1fa8c".to_string(),
+            success: "#50fa7b".to_string(),
+            error: "#ff5555".to_string(),
+        }),
+        "one_dark" | "onedark" => Some(Theme {
+            background: "#282c34".to_string(),
+            foreground: "#abb2bf".to_string(),
+            accent: "#61afef".to_string(),
+            border: "#4b5263".to_string(),
+            selection: "#3e4451".to_string(),
+            warning: "#e5c07b".to_string(),
+            success: "#98c379".to_string(),
+            error: "#e06c75".to_string(),
+        }),
         _ => None,
     }
 }
@@ -187,5 +207,19 @@ mod tests {
         assert_eq!(theme.background, "transparent");
         let styles = ThemeStyles::from_theme(&theme, false);
         assert_eq!(styles.background, Color::Reset);
+    }
+
+    #[test]
+    fn test_builtin_dracula_and_onedark_themes() {
+        let dracula = get_builtin_theme("dracula").unwrap();
+        assert_eq!(dracula.background, "#282a36");
+        assert_eq!(dracula.accent, "#bd93f9");
+
+        let onedark = get_builtin_theme("one_dark").unwrap();
+        assert_eq!(onedark.background, "#282c34");
+        assert_eq!(onedark.accent, "#61afef");
+
+        let onedark_alias = get_builtin_theme("onedark").unwrap();
+        assert_eq!(onedark_alias.background, "#282c34");
     }
 }
